@@ -1,0 +1,9 @@
+package-lock.json
+docs/software-architecture.md
+.local
+work
+coverage
+playwright-report
+test-results
+**/dist
+supabase
