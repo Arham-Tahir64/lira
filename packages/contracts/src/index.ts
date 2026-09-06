@@ -119,3 +119,56 @@ export const IssueResponse = object({
   created_at: Type.String(),
   updated_at: Type.String(),
 });
+
+export const MemberParams = object({ orgId: Uuid, membershipId: Uuid });
+export const InviteParams = object({ orgId: Uuid, invitationId: Uuid });
+export const TeamParams = object({ orgId: Uuid, teamId: Uuid });
+export const TeamMemberParams = object({
+  orgId: Uuid,
+  teamId: Uuid,
+  membershipId: Uuid,
+});
+export const InviteInput = object({
+  email: Type.String({ format: "email", maxLength: 254 }),
+  role: Type.Union([Type.Literal("member"), Type.Literal("admin")]),
+});
+export const AcceptInviteInput = object({
+  token: Type.String({ pattern: "^[A-Za-z0-9_-]{43}$" }),
+});
+export const MemberRoleInput = object({
+  role: Type.Union([
+    Type.Literal("owner"),
+    Type.Literal("admin"),
+    Type.Literal("member"),
+  ]),
+});
+export const TransferInput = object({ membershipId: Uuid });
+export const TeamInput = object({
+  name: Type.String({ minLength: 1, maxLength: 100, pattern: "\\S" }),
+});
+export const MemberResponse = object({
+  id: Uuid,
+  user_id: Uuid,
+  role: Type.Union([
+    Type.Literal("owner"),
+    Type.Literal("admin"),
+    Type.Literal("member"),
+  ]),
+  display_name: Type.String(),
+  state: Type.Union([Type.Literal("active"), Type.Literal("inactive")]),
+});
+export type RosterMember = Static<typeof MemberResponse>;
+export interface Invitation {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+export interface Team {
+  id: string;
+  name: string;
+  member_ids: string[];
+}

@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import type { Backend } from "../client";
 import { Brand, Notice } from "../components/primitives";
 import { text, message } from "../form";
+import { invitationStorageKey } from "../invitation";
 export function PasswordReset({
   backend,
   onComplete,
@@ -105,6 +106,12 @@ export function SignIn({ backend }: { backend: Backend }) {
         <p>A shared place for projects, people, and the work ahead.</p>
       </div>
       <form onSubmit={submit}>
+        {sessionStorage.getItem(invitationStorageKey) && (
+          <p className="hint">
+            Use the email on your invitation. After verifying a new account,
+            open the invitation link again.
+          </p>
+        )}
         <h2>
           {mode === "signup"
             ? "Create your account"

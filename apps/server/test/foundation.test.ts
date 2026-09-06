@@ -14,18 +14,24 @@ import { migrate } from "../../../scripts/migrate.js";
 const alice: Identity = {
   id: randomUUID(),
   displayName: "Alice",
+  email: "alice@example.test",
+  authenticatedAt: Math.floor(Date.now() / 1000),
   issuedAt: Math.floor(Date.now() / 1000),
   sessionId: randomUUID(),
 };
 const bob: Identity = {
   id: randomUUID(),
   displayName: "Bob",
+  email: "bob@example.test",
+  authenticatedAt: Math.floor(Date.now() / 1000),
   issuedAt: Math.floor(Date.now() / 1000),
   sessionId: randomUUID(),
 };
 const member: Identity = {
   id: randomUUID(),
   displayName: "Member",
+  email: "member@example.test",
+  authenticatedAt: Math.floor(Date.now() / 1000),
   issuedAt: Math.floor(Date.now() / 1000),
   sessionId: randomUUID(),
 };

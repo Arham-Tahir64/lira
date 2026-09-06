@@ -36,9 +36,11 @@ The image includes the migration source and `tsx` tooling so an authorized one-o
 - Migration owner: owns tables; never used for web requests.
 - `app_api`: non-login runtime privilege group; no RLS bypass, ownership, or role creation.
 - `app_bootstrap`: non-login role owning only the bounded organization-creation function. It has narrowly granted organization/membership access; ordinary logins must **not** inherit it.
+- `app_invitation_accept`: non-login function role for bounded invitation acceptance; no runtime login may inherit it.
+- `app_owner_guard`: non-login read-only trigger role enforcing the last-owner invariant.
 - `lira_api`: login inheriting `app_api`, provisioned separately from migrations. Test startup rejects privileged connections.
 
-Organization-scoped requests acquire a shared advisory lock, verify membership, set transaction-local tenant context, and use the same checked-out connection. Future roster changes must use the matching exclusive lock before changing memberships. Provider tokens never determine organization roles.
+Organization-scoped requests acquire a shared advisory lock, verify membership, set transaction-local tenant context, and use the same checked-out connection. Roster and team mutations use the matching exclusive lock before changing memberships. Provider tokens never determine organization roles.
 
 ## Recovery gate before real club data
 

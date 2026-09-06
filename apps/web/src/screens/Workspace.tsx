@@ -7,20 +7,24 @@ import type { Backend } from "../client";
 import { Brand, Notice, Dialog } from "../components/primitives";
 import { text, message } from "../form";
 import { ProjectView } from "./Project";
+import { People } from "./People";
 export function Workspace({
   backend,
   session,
+  initialOrgId,
 }: {
   backend: Backend;
   session: Session;
+  initialOrgId?: string;
 }) {
   const cache = useQueryClient();
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useState(initialOrgId ?? "");
+  const [section, setSection] = useState<"projects" | "people">("projects");
   const [projectId, setProjectId] = useState("");
   const [dialog, setDialog] = useState<"org" | "project" | null>(null);
   const [signoutError, setSignoutError] = useState("");
   const orgs = useQuery({
-    queryKey: ["organizations"],
+    queryKey: ["organizations", session.user.id],
     queryFn: () => backend.api<Organization[]>("/me/organizations"),
   });
   const org = orgs.data?.find((o) => o.id === orgId) ?? orgs.data?.[0];
@@ -71,6 +75,15 @@ export function Workspace({
           <Plus size={16} />
           New workspace
         </button>
+        {org && (
+          <button
+            className={`project-nav ${section === "people" ? "active" : ""}`}
+            onClick={() => setSection("people")}
+          >
+            <Users size={16} />
+            People & teams
+          </button>
+        )}
         <div className="nav-heading">
           <span>Projects</span>
           {canManage && (
@@ -87,8 +100,11 @@ export function Workspace({
           {projects.data?.map((p) => (
             <button
               key={p.id}
-              className={`project-nav ${project?.id === p.id ? "active" : ""}`}
-              onClick={() => setProjectId(p.id)}
+              className={`project-nav ${section === "projects" && project?.id === p.id ? "active" : ""}`}
+              onClick={() => {
+                setProjectId(p.id);
+                setSection("projects");
+              }}
             >
               <span className="project-mark">{p.key.slice(0, 1)}</span>
               {p.name}
@@ -116,13 +132,24 @@ export function Workspace({
         <header className="topbar">
           <span>{org?.name ?? "Get started"}</span>
           <span className="separator">/</span>
-          <strong>{project?.name ?? "Projects"}</strong>
+          <strong>
+            {section === "people"
+              ? "People & teams"
+              : (project?.name ?? "Projects")}
+          </strong>
           <span className="topbar-note">A shared space to get things done</span>
         </header>
         {signoutError && <Notice>{signoutError}</Notice>}
         {orgs.error && <Notice>{message(orgs.error)}</Notice>}
         {projects.error && <Notice>{message(projects.error)}</Notice>}
-        {orgs.isPending ? (
+        {org && section === "people" ? (
+          <People
+            key={org.id}
+            backend={backend}
+            org={org}
+            userId={session.user.id}
+          />
+        ) : orgs.isPending ? (
           <div className="empty" role="status">
             Loading your workspaces…
           </div>
@@ -176,7 +203,10 @@ export function Workspace({
             if (dialog === "org") {
               setOrgId(id);
               setProjectId("");
-            } else setProjectId(id);
+            } else {
+              setProjectId(id);
+              setSection("projects");
+            }
             setDialog(null);
           }}
         />

@@ -21,6 +21,8 @@ import type { VerifyIdentity, Identity } from "./identity.js";
 import { withIdentity, withTenant } from "./database.js";
 import { Problem } from "./problem.js";
 import { createIssue, listIssues, updateIssue } from "./work.js";
+import { organizationRoutes } from "./organization-routes.js";
+import { requireAdmin } from "./policy.js";
 
 export interface AppOptions {
   pool: pg.Pool;
@@ -101,10 +103,30 @@ export async function buildApp(options: AppOptions) {
         message: "One or more fields are invalid.",
         requestId: request.id,
       });
+    if (err.code === "P0002")
+      return reply.code(404).send({
+        code: "invitation_unavailable",
+        message:
+          "This invitation is expired, used, revoked, or for a different email.",
+        requestId: request.id,
+      });
+    if (err.code === "P0003")
+      return reply.code(409).send({
+        code: "already_member",
+        message: "You already belong to this workspace.",
+        requestId: request.id,
+      });
+    if (err.code === "P0004")
+      return reply.code(409).send({
+        code: "last_owner",
+        message: "A workspace must retain at least one active owner.",
+        requestId: request.id,
+      });
     if (err.code === "P0001")
       return reply.code(429).send({
-        code: "organization_limit",
-        message: "You can create up to three workspaces during the pilot.",
+        code: "pilot_limit",
+        message:
+          "This action would exceed a pilot workspace or membership limit.",
         requestId: request.id,
       });
     if (err.statusCode === 429)
@@ -196,23 +218,7 @@ export async function buildApp(options: AppOptions) {
           return reply.code(201).send({ ...org, role: "owner" });
         },
       );
-      api.get<{ Params: Static<typeof OrgParams> }>(
-        "/orgs/:orgId/members",
-        { schema: { params: OrgParams, security } },
-        async (request) =>
-          withTenant(
-            options.pool,
-            request.identity,
-            request.params.orgId,
-            async (tx) =>
-              (
-                await tx.query(
-                  "SELECT id,user_id,role FROM app.memberships WHERE org_id=$1 AND state='active' ORDER BY created_at,id LIMIT 100",
-                  [request.params.orgId],
-                )
-              ).rows,
-          ),
-      );
+      await organizationRoutes(api, options.pool);
       api.get<{ Params: Static<typeof OrgParams> }>(
         "/orgs/:orgId/projects",
         { schema: { params: OrgParams, security } },
@@ -242,12 +248,7 @@ export async function buildApp(options: AppOptions) {
             request.identity,
             request.params.orgId,
             async (tx, member) => {
-              if (!["owner", "admin"].includes(member.role))
-                throw new Problem(
-                  403,
-                  "forbidden",
-                  "Only workspace administrators can create projects.",
-                );
+              requireAdmin(member);
               const { rows } = await tx.query(
                 "INSERT INTO app.projects(org_id,name,key,description,lead_membership_id) VALUES($1,$2,$3,$4,$5) RETURNING id,name,key,description,lead_membership_id,archived_at",
                 [

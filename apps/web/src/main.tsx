@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBackend } from "./client";
 import { App } from "./App";
 import "./style.css";
+import { captureInvitation } from "./invitation";
+captureInvitation();
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 const queryClient = new QueryClient({
   defaultOptions: {
