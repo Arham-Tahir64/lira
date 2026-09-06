@@ -16,7 +16,7 @@
     "typecheck": "npm run build -w @lira/contracts && npm run typecheck --workspaces --if-present",
     "lint": "eslint . --max-warnings 0",
     "test": "npm run build -w @lira/contracts && vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=desktop",
     "db:migrate": "tsx scripts/migrate.ts",
     "start": "node apps/server/dist/main.js",
     "db:provision-login": "tsx scripts/provision-login.ts",

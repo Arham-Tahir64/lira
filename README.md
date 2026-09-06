@@ -2,7 +2,9 @@
 
 A lightweight, multi-tenant project workspace for student clubs. Built against the accepted [software architecture](docs/software-architecture.md).
 
-**Status: foundation implemented; Phase 2 membership and teams in progress.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
+**Status: foundation and Phase 2 membership/teams implemented; staging validation pending.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
+
+**Product priority: laptop/desktop first.** New interface work and release verification target desktop browsers. Mobile-specific design and verification are deferred unless demand warrants them.
 
 ## Implemented
 
@@ -11,7 +13,7 @@ A lightweight, multi-tenant project workspace for student clubs. Built against t
 - PostgreSQL tenant isolation with transaction-local context, forced RLS, composite foreign keys, separate bootstrap/runtime roles, and fail-closed startup credential checks.
 - Atomic task/activity/outbox creation, concurrent issue numbering, idempotent task creation, versioned updates, and bounded task pagination.
 - Email-bound invitation links, roster and team management, recent-authentication ownership transfer, and safe member removal with database-enforced last-owner protection.
-- Real PostgreSQL integration tests, signed-token verification tests, desktop/mobile UI tests, CI, and a production container definition.
+- Real PostgreSQL integration tests, signed-token verification tests, desktop UI release checks, CI, and a production container definition. Existing mobile test configuration remains available as an optional check.
 
 ## Start locally
 

@@ -24,6 +24,8 @@ Real club Supabase configuration, actual SMTP delivery/PKCE redirects, hosted mi
 
 The combined suite passes 35 API/database/identity tests and four desktop/mobile browser tests. The final React Doctor scan reports five advisory warnings (67/100); the team-member lookup warning was corrected with a set. The remaining findings are assessed above.
 
+After that verification, the user changed the product priority to laptop/desktop first. `npm run test:e2e` now runs the two desktop journeys as the release gate. The existing mobile project is optional (`npx playwright test --project=mobile`); mobile-specific verification is no longer required for new work.
+
 PostgreSQL tests also cover email normalization/binding, simultaneous invite acceptance, expired/revoked invites, reduced inviter privileges, stale authentication, direct-SQL last-owner protection, concurrent owner demotions, ownership transfer, tenant-scoped team membership, offboarding cleanup, and replay of consumed invitations after removal. UI tests cover creating a shareable invite, managing a team, password-confirmed role changes, and fragment-based invitation capture/acceptance on desktop and mobile.
 
 Do not interpret UI provider fixtures as staging SMTP/reauthentication verification. Those gates remain open until a real Supabase project is configured.

@@ -2,6 +2,10 @@
 
 Reference: [accepted architecture](software-architecture.md), particularly Sections 14–16. This file records progress; it does not replace or broaden the architecture.
 
+## Product direction update — September 5, 2026
+
+The user explicitly prioritized laptop/desktop usage. New UI work, usability review, and release browser checks target desktop. Mobile-specific work and verification are deferred; existing responsive styling and optional mobile test configuration remain available. Keyboard accessibility remains required. This update supersedes the original mobile-layout acceptance criterion.
+
 ## Foundation: implemented in the preceding increment
 
 Implemented and covered by checks:
