@@ -26,7 +26,7 @@ Implemented and covered by checks:
 - Have a second maintainer review and explain tenant context, bootstrap privileges, migrations, and deployment setup.
 - Confirm the club's initial workflow and usability priorities with intended members.
 
-## Current increment: Phase 2 membership and teams
+## Completed increment: Phase 2 membership and teams
 
 - Email-bound, single-use, seven-day invitation links; only token hashes are stored. Creation/revocation requires an administrator, and Admin invitations require an Owner.
 - Invitation acceptance checks current inviter permissions, expiry/revocation, the verified recipient email, and the 100-active-member pilot cap atomically.
@@ -36,10 +36,20 @@ Implemented and covered by checks:
 - A deferred PostgreSQL trigger prevents removal/demotion of the final owner even through direct SQL. Teams are organizational groups and grant no project permissions.
 - Invitations currently provide a one-time link for the administrator to share. No automatic email is sent; email delivery is pending the planned worker step. Organization activity is persisted; notification delivery is not implied.
 
+## Current increment: Phase 2 project workflows
+
+- Desktop task editor for title, description, status, backlog/planned state, priority, assignee, due date, and labels. Saves use version preconditions; conflicts preserve the editor and require refresh before retry.
+- Organization labels and normalized issue-label joins with forced RLS and composite tenant foreign keys. Up to 200 workspace labels and 20 labels per task; creation and application are supported.
+- PostgreSQL generated full-text vector and GIN index for title/description, exact issue-key lookup, and filters for assignee, priority, label, due date, planning state, and status. Search is submitted explicitly and covers the project database, not only loaded rows.
+- Independent 25-item pagination per board column; list pages remain 50. Numeric rank ordering, project-locked moves and gap rebalancing, stale-neighbor and version checks. Keyboard status selection and Move up provide ordering without drag-and-drop; reordering is disabled while filters are applied.
+- Reversible project archive for administrators or the project lead. Archived tasks remain readable and reject writes at the API. No data is deleted by archiving.
+- Chronological, paginated project activity with actor names and operational field changes. Description changes record only that the body changed, not copies of its contents. Before-values are captured under a row lock.
+- Migration 003 adds labels, joins, search vector and indexes. Existing migrations are unchanged.
+
 ## Phase 2 next work, in dependency order
 
 1. Validate the new membership flows against the real staging Supabase project, including password reauthentication and invitation onboarding.
-2. Complete issue editing/assignment UI, labels, search, ordered movement and bounded board-column pagination; project archiving and operational activity UI.
+2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search, label rename/removal, and drag-and-drop are not included in this increment; project-scoped search and keyboard ordering are implemented.
 3. Durable worker claiming/leases, retries, idempotent in-app notifications, email provider adapter; current pending outbox events remain unconsumed until this ships.
 4. Comments and attachment metadata/quotas, private storage transfer/validation, independent object backup.
 5. Basic dashboard, two bundled student-club templates, organization export.
@@ -51,13 +61,13 @@ Sprints, private projects, configurable workflows, billing, OAuth beyond email, 
 
 ## Current limits to carry forward
 
-- Organization/member/project listings are capped at 100 for the small internal foundation; full pagination/quotas must ship before larger onboarding. Task pagination is implemented; the current local filter explicitly searches loaded tasks only.
-- UI edits status; the API also supports detail/priority/assignee/due-date edits. UI assignment, comments, and uploads remain Phase 2; invitations and roster/team management now have UI.
+- Organization/member/project listings are capped at 100 for the small internal foundation; full pagination/quotas must ship before larger onboarding. Task pagination and project-wide server search are implemented.
+- Issue detail/priority/assignee/due-date editing and labels now have UI. Comments and uploads remain pending.
 - This increment uses parameterized `pg` queries rather than adding an unused query-builder layer; it follows the plan's PostgreSQL/explicit-transaction approach.
 - Durable outbox records are not a claim of notification delivery. Worker deployment will be added alongside a real consumer.
 - Idempotency records are retained until maintenance is implemented. The service currently gives stronger retry retention than the architecture's proposed 24-hour window; retention cleanup must not delete records while requests are active.
-- Task views sort by UUID for stable cursor pagination. Stored ranks and the planned movement/rebalancing behavior are not exposed yet.
-- Activity payloads currently record status and priority. Full operational field history is required before calling the MVP activity feature complete.
+- Task views sort by numeric rank and UUID. Cursors resolve a tenant/project-scoped issue anchor; these are live views, not snapshots. Concurrent movement can change page boundaries; clients invalidate and refetch after writes, and missing anchors require refresh.
+- New issue updates record changed operational fields, label IDs, and description-change markers. Earlier activity rows retain their original, more limited payloads. Membership offboarding events remain intact.
 - Membership mutations now take an exclusive organization advisory lock matching the shared authorization lock in `withTenant`. This avoids grant escalation merely to use SQL row locks during bootstrap reads.
 - API logout denylisting covers 24 hours; configure provider access-token lifetime to 30 minutes and never above that window. Logout-all and session-management UI are not shipped yet.
 - The test binary packaging tool has a beta version suffix; the PostgreSQL binary is a stable PostgreSQL 17 release. This is development-only tooling and not the production database/runtime.

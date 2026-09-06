@@ -18,7 +18,7 @@ The browser-artifact authority-map warning is reviewed as expected public config
 
 ## Not yet verified
 
-Real club Supabase configuration, actual SMTP delivery/PKCE redirects, hosted migration privileges, deployed TLS/network access, backup restoration, the new membership branch CI, and a production container run remain separate staging/release gates. No claim is made that the complete MVP or commercial launch is ready.
+Real club Supabase configuration, actual SMTP delivery/PKCE redirects, hosted migration privileges, deployed TLS/network access, backup restoration, and a production container run remain separate staging/release gates. No claim is made that the complete MVP or commercial launch is ready.
 
 ## Membership coverage
 
@@ -29,3 +29,11 @@ After that verification, the user changed the product priority to laptop/desktop
 PostgreSQL tests also cover email normalization/binding, simultaneous invite acceptance, expired/revoked invites, reduced inviter privileges, stale authentication, direct-SQL last-owner protection, concurrent owner demotions, ownership transfer, tenant-scoped team membership, offboarding cleanup, and replay of consumed invitations after removal. UI tests cover creating a shareable invite, managing a team, password-confirmed role changes, and fragment-based invitation capture/acceptance on desktop and mobile.
 
 Do not interpret UI provider fixtures as staging SMTP/reauthentication verification. Those gates remain open until a real Supabase project is configured.
+
+## Project workflow increment
+
+The real PostgreSQL suite now has 39 tests. Added checks exercise indexed text/exact-key search with filters, cross-tenant labels and composite foreign keys, rejected-update rollback, operational history without description bodies, concurrent/versioned moves, small-gap rebalancing, per-status cursor pagination, archive permissions, and chronological activity pages. The two desktop browser journeys include full task edits, assignment and label persistence after reopening, server-search requests, activity, and archive/restore controls. The fixtures verify UI behavior; real SQL/API tests verify enforcement.
+
+React Doctor findings were reviewed against the code. Error notices now have stable rendering rather than filtered array-index keys. Component complexity and bounded filter/map chains remain maintainability advisories, not demonstrated correctness failures. Board columns, task editing, and history live in separate components. Public Supabase configuration remains identity-only; no new direct domain-database access was introduced.
+
+Search performance at production data volume is not benchmarked. The generated vector and GIN/B-tree indexes are installed and queries run in real PostgreSQL tests; representative EXPLAIN ANALYZE/load testing remains a beta gate. Search uses English stemming and exact issue keys, not fuzzy or substring matching. The workflow branch CI and deployed-provider validation are separate checks.

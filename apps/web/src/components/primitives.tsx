@@ -19,17 +19,25 @@ export function Dialog({
   title,
   onClose,
   children,
+  className,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
   return (
-    <dialog ref={ref} onCancel={onClose} onClose={onClose} aria-label={title}>
+    <dialog
+      ref={ref}
+      className={className}
+      onCancel={onClose}
+      onClose={onClose}
+      aria-label={title}
+    >
       <header>
         <h2>{title}</h2>
         <button

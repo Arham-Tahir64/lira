@@ -111,7 +111,7 @@ export async function createIssue(
   }
   await assigneeAccess(tx, orgId, input.assigneeMembershipId);
   const { rows } = await tx.query<Issue>(
-    `INSERT INTO app.issues(org_id,project_id,number,title,description,priority,planning_state,assignee_membership_id,creator_membership_id,due_date,rank) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$3*1024) RETURNING ${fields}`,
+    `INSERT INTO app.issues(org_id,project_id,number,title,description,priority,planning_state,assignee_membership_id,creator_membership_id,due_date,rank) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,(SELECT COALESCE(max(rank),0)+1024 FROM app.issues WHERE org_id=$1 AND project_id=$2)) RETURNING ${fields}`,
     [
       orgId,
       projectId,
@@ -126,7 +126,14 @@ export async function createIssue(
     ],
   );
   const issue = rows[0]!;
-  await record(tx, orgId, issue, member, "issue.created", {});
+  await record(tx, orgId, issue, member, "issue.created", {
+    title: issue.title,
+    status: issue.status,
+    priority: issue.priority,
+    planning_state: issue.planning_state,
+    assignee_membership_id: issue.assignee_membership_id,
+    due_date: issue.due_date,
+  });
   await tx.query(
     "INSERT INTO app.idempotency_records(org_id,user_id,operation,key,request_hash,response) VALUES($1,$2,$3,$4,$5,$6)",
     [orgId, member.user_id, operation, key, hash, JSON.stringify(issue)],
@@ -140,11 +147,49 @@ export async function listIssues(
   limit: number,
   after?: string,
   planning?: string,
+  filters: {
+    status?: string;
+    q?: string;
+    assignee?: string;
+    priority?: string;
+    label?: string;
+    dueBefore?: string;
+  } = {},
 ) {
   await projectAccess(tx, orgId, projectId);
+  if (after) {
+    const cursor = await tx.query(
+      "SELECT id FROM app.issues WHERE org_id=$1 AND project_id=$2 AND id=$3",
+      [orgId, projectId, after],
+    );
+    if (!cursor.rowCount)
+      throw new Problem(400, "invalid_cursor", "Refresh this task view.");
+  }
   const result = await tx.query<Issue>(
-    `SELECT ${fields} FROM app.issues WHERE org_id=$1 AND project_id=$2 AND ($3::uuid IS NULL OR id>$3) AND ($4::text IS NULL OR planning_state=$4) ORDER BY id LIMIT $5`,
-    [orgId, projectId, after ?? null, planning ?? null, limit + 1],
+    `SELECT ${fields} FROM app.issues WHERE org_id=$1 AND project_id=$2
+      AND ($3::uuid IS NULL OR (rank,id) > (SELECT rank,id FROM app.issues WHERE org_id=$1 AND project_id=$2 AND id=$3))
+      AND ($4::text IS NULL OR planning_state=$4)
+      AND ($6::text IS NULL OR status=$6)
+      AND ($7::text IS NULL OR search_vector @@ websearch_to_tsquery('english',$7)
+        OR lower((SELECT key FROM app.projects WHERE org_id=$1 AND id=$2)||'-'||number)=lower($7))
+      AND ($8::uuid IS NULL OR assignee_membership_id=$8)
+      AND ($9::text IS NULL OR priority=$9)
+      AND ($10::uuid IS NULL OR EXISTS(SELECT 1 FROM app.issue_labels il WHERE il.org_id=$1 AND il.issue_id=issues.id AND il.label_id=$10))
+      AND ($11::date IS NULL OR due_date<=$11)
+      ORDER BY rank,id LIMIT $5`,
+    [
+      orgId,
+      projectId,
+      after ?? null,
+      planning ?? null,
+      limit + 1,
+      filters.status ?? null,
+      filters.q?.trim() || null,
+      filters.assignee ?? null,
+      filters.priority ?? null,
+      filters.label ?? null,
+      filters.dueBefore ?? null,
+    ],
   );
   return {
     items: result.rows.slice(0, limit),
@@ -163,9 +208,22 @@ export async function updateIssue(
     `SELECT ${fields} FROM app.issues WHERE org_id=$1 AND id=$2`,
     [orgId, issueId],
   );
-  const old = existing.rows[0];
+  let old = existing.rows[0];
   if (!old) throw new Problem(404, "not_found", "Task not found.");
   await projectAccess(tx, orgId, old.project_id, true);
+  // Lock after the project to preserve global lock ordering and accurate before-values.
+  old = (
+    await tx.query<Issue>(
+      `SELECT ${fields} FROM app.issues WHERE org_id=$1 AND id=$2 FOR UPDATE`,
+      [orgId, issueId],
+    )
+  ).rows[0]!;
+  if (old.version !== expected)
+    throw new Problem(
+      412,
+      "stale_version",
+      "This task changed. Refresh it before saving again.",
+    );
   await assigneeAccess(tx, orgId, input.assigneeMembershipId);
   const values: unknown[] = [orgId, issueId, expected];
   const setters: string[] = [];
@@ -184,6 +242,7 @@ export async function updateIssue(
     values.push(value);
     setters.push(`${column}=$${values.length}`);
   }
+  if (!setters.length && input.labelIds) setters.push("title=title");
   if (!setters.length)
     throw new Problem(
       400,
@@ -211,10 +270,48 @@ export async function updateIssue(
       "This task changed. Refresh it before saving again.",
     );
   const issue = result.rows[0];
-  // Activity tracks selected operational fields; don't duplicate private description bodies.
-  await record(tx, orgId, issue, member, "issue.updated", {
-    status: { before: old.status, after: issue.status },
-    priority: { before: old.priority, after: issue.priority },
-  });
+  const changes: Record<string, unknown> = {};
+  for (const field of [
+    "title",
+    "status",
+    "priority",
+    "planning_state",
+    "assignee_membership_id",
+    "due_date",
+  ] as const) {
+    if (old[field] !== issue[field])
+      changes[field] = { before: old[field], after: issue[field] };
+  }
+  if (old.description !== issue.description)
+    changes.description = { changed: true };
+  if (input.labelIds) {
+    const labels = await tx.query(
+      "SELECT id FROM app.labels WHERE org_id=$1 AND id=ANY($2::uuid[])",
+      [orgId, input.labelIds],
+    );
+    if (labels.rowCount !== input.labelIds.length)
+      throw new Problem(
+        400,
+        "invalid_label",
+        "Choose labels from this workspace.",
+      );
+    const previous = await tx.query(
+      "SELECT label_id FROM app.issue_labels WHERE org_id=$1 AND issue_id=$2",
+      [orgId, issueId],
+    );
+    await tx.query(
+      "DELETE FROM app.issue_labels WHERE org_id=$1 AND issue_id=$2",
+      [orgId, issueId],
+    );
+    await tx.query(
+      "INSERT INTO app.issue_labels(org_id,issue_id,label_id) SELECT $1,$2,unnest($3::uuid[])",
+      [orgId, issueId, input.labelIds],
+    );
+    changes.labels = {
+      before: previous.rows.map((r) => r.label_id),
+      after: input.labelIds,
+    };
+  }
+  await record(tx, orgId, issue, member, "issue.updated", changes);
   return issue;
 }

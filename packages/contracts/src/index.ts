@@ -41,6 +41,9 @@ export const IssueInput = object({
   ),
 });
 export const IssuePatch = object({
+  labelIds: Type.Optional(
+    Type.Array(Uuid, { maxItems: 20, uniqueItems: true }),
+  ),
   title: Type.Optional(
     Type.String({ minLength: 1, maxLength: 200, pattern: "\\S" }),
   ),
@@ -60,6 +63,12 @@ export const PageQuery = object({
   after: Type.Optional(Uuid),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 50 })),
   planningState: Type.Optional(PlanningState),
+  status: Type.Optional(Status),
+  q: Type.Optional(Type.String({ maxLength: 200 })),
+  assignee: Type.Optional(Uuid),
+  priority: Type.Optional(Priority),
+  label: Type.Optional(Uuid),
+  dueBefore: Type.Optional(Type.String({ format: "date" })),
 });
 export type CreateIssue = Static<typeof IssueInput>;
 export type UpdateIssue = Static<typeof IssuePatch>;
@@ -171,4 +180,27 @@ export interface Team {
   id: string;
   name: string;
   member_ids: string[];
+}
+
+export const LabelInput = object({
+  name: Type.String({ minLength: 1, maxLength: 40, pattern: "\\S" }),
+});
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+export const MoveInput = object({
+  status: Status,
+  planningState: PlanningState,
+  beforeId: Type.Union([Uuid, Type.Null()]),
+  expectedVersion: Type.Integer({ minimum: 1, maximum: 999999999 }),
+});
+export interface Activity {
+  issue_number: number | null;
+  id: string;
+  action: string;
+  actor_name: string;
+  created_at: string;
+  changes: Record<string, unknown>;
 }
