@@ -37,3 +37,11 @@ The real PostgreSQL suite now has 39 tests. Added checks exercise indexed text/e
 React Doctor findings were reviewed against the code. Error notices now have stable rendering rather than filtered array-index keys. Component complexity and bounded filter/map chains remain maintainability advisories, not demonstrated correctness failures. Board columns, task editing, and history live in separate components. Public Supabase configuration remains identity-only; no new direct domain-database access was introduced.
 
 Search performance at production data volume is not benchmarked. The generated vector and GIN/B-tree indexes are installed and queries run in real PostgreSQL tests; representative EXPLAIN ANALYZE/load testing remains a beta gate. Search uses English stemming and exact issue keys, not fuzzy or substring matching. The workflow branch CI and deployed-provider validation are separate checks.
+
+## Worker and inbox increment
+
+The PostgreSQL/identity/worker suite passes 51 tests. New checks exercise runtime-role separation, concurrent claims, lease replacement and stale acknowledgment, in-app deduplication and recipient RLS, wrong-tenant jobs, removal/reassignment checks, independent in-app commit, immutable mail retries, missing mail configuration, opt-out and age limits, daily budgets, failed states, and provider error sanitization. The two desktop journeys additionally cover inbox display, preferences, marking read and filtering unread. The inbox screenshot was visually reviewed.
+
+Email tests use fake transport; no external recipient was contacted. Real Resend delivery, hosted worker termination/recovery and an authorized retention rehearsal remain staging gates.
+
+Retention checks also verify that preview mode is read-only, old rows are removed only in apply mode, and pending jobs survive cleanup. React Doctor reports advisory complexity and bounded-iteration findings; the new inbox introduces no direct domain database access or scanner bug findings.

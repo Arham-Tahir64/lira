@@ -1,12 +1,20 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
-import { ChevronDown, LayoutGrid, LogOut, Plus, Users } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  LayoutGrid,
+  LogOut,
+  Plus,
+  Users,
+} from "lucide-react";
 import type { Organization, Project } from "@lira/contracts";
 import type { Backend } from "../client";
 import { Brand, Notice, Dialog } from "../components/primitives";
 import { text, message } from "../form";
 import { ProjectView } from "./Project";
+import { Notifications } from "./Notifications";
 import { People } from "./People";
 export function Workspace({
   backend,
@@ -19,7 +27,9 @@ export function Workspace({
 }) {
   const cache = useQueryClient();
   const [orgId, setOrgId] = useState(initialOrgId ?? "");
-  const [section, setSection] = useState<"projects" | "people">("projects");
+  const [section, setSection] = useState<
+    "projects" | "people" | "notifications"
+  >("projects");
   const [projectId, setProjectId] = useState("");
   const [dialog, setDialog] = useState<"org" | "project" | null>(null);
   const [signoutError, setSignoutError] = useState("");
@@ -84,6 +94,15 @@ export function Workspace({
             People & teams
           </button>
         )}
+        {org && (
+          <button
+            className={`project-nav ${section === "notifications" ? "active" : ""}`}
+            onClick={() => setSection("notifications")}
+          >
+            <Bell size={16} />
+            Notifications
+          </button>
+        )}
         <div className="nav-heading">
           <span>Projects</span>
           {canManage && (
@@ -135,14 +154,27 @@ export function Workspace({
           <strong>
             {section === "people"
               ? "People & teams"
-              : (project?.name ?? "Projects")}
+              : section === "notifications"
+                ? "Notifications"
+                : (project?.name ?? "Projects")}
           </strong>
           <span className="topbar-note">A shared space to get things done</span>
         </header>
         {signoutError && <Notice>{signoutError}</Notice>}
         {orgs.error && <Notice>{message(orgs.error)}</Notice>}
         {projects.error && <Notice>{message(projects.error)}</Notice>}
-        {org && section === "people" ? (
+        {org && section === "notifications" ? (
+          <Notifications
+            key={org.id}
+            backend={backend}
+            orgId={org.id}
+            userId={session.user.id}
+            onProject={(id) => {
+              setProjectId(id);
+              setSection("projects");
+            }}
+          />
+        ) : org && section === "people" ? (
           <People
             key={org.id}
             backend={backend}

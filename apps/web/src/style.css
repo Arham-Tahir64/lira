@@ -1061,3 +1061,35 @@ dialog.issue-editor {
   padding: 12px 0;
   z-index: 1;
 }
+.notification-controls {
+  display: flex;
+  gap: 32px;
+  padding: 20px 0;
+  border-bottom: 1px solid #e7e4ee;
+}
+.notification-controls label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.notification-controls input {
+  width: auto;
+}
+.notification-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 12px;
+  border-bottom: 1px solid #e7e4ee;
+}
+.notification-row > div {
+  flex: 1;
+}
+.notification-row strong {
+  margin-left: 12px;
+}
+.notification-row.unread {
+  border-left: 3px solid #6853cc;
+  background: #faf9fd;
+}

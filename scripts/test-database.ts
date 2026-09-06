@@ -58,6 +58,9 @@ export async function setup() {
       await admin.query(
         "CREATE ROLE lira_test_api LOGIN PASSWORD 'test-only' IN ROLE app_api NOSUPERUSER NOBYPASSRLS",
       );
+      await admin.query(
+        "CREATE ROLE lira_test_worker LOGIN PASSWORD 'test-only' IN ROLE app_worker NOSUPERUSER NOBYPASSRLS",
+      );
     } finally {
       await admin.end();
     }
@@ -66,6 +69,8 @@ export async function setup() {
     runtime.password = "test-only";
     process.env.TEST_ADMIN_DATABASE_URL = url;
     process.env.TEST_DATABASE_URL = runtime.toString();
+    runtime.username = "lira_test_worker";
+    process.env.TEST_WORKER_DATABASE_URL = runtime.toString();
   } catch (error) {
     await cleanup();
     throw error;

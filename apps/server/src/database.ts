@@ -20,6 +20,10 @@ export async function withIdentity<T>(
       "INSERT INTO app.users(id,auth_subject,display_name) VALUES($1,$1,$2) ON CONFLICT(id) DO NOTHING",
       [identity.id, identity.displayName],
     );
+    await tx.query(
+      "UPDATE app.users SET verified_email=$2,email_verified_at=now() WHERE id=$1",
+      [identity.id, identity.email.trim().toLowerCase()],
+    );
     const { rows } = await tx.query(
       "SELECT disabled_at,sessions_revoked_before FROM app.users WHERE id=$1",
       [identity.id],
@@ -77,7 +81,7 @@ export async function withTenant<T>(
 export async function assertRuntimeRole(pool: pg.Pool) {
   const result = await pool.query(`SELECT r.rolsuper,r.rolbypassrls,
     EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='app' AND pg_has_role(current_user,c.relowner,'USAGE')) AS owns_tables,
-    EXISTS(SELECT 1 FROM pg_roles f WHERE f.rolname IN ('app_bootstrap','app_invitation_accept','app_owner_guard') AND pg_has_role(current_user,f.oid,'MEMBER')) AS privileged_function_role,
+    EXISTS(SELECT 1 FROM pg_roles f WHERE f.rolname IN ('app_bootstrap','app_invitation_accept','app_owner_guard','app_scheduler','app_worker') AND pg_has_role(current_user,f.oid,'MEMBER')) AS privileged_function_role,
     pg_has_role(current_user,'app_api','MEMBER') AS api_member FROM pg_roles r WHERE rolname=current_user`);
   const role = result.rows[0];
   if (

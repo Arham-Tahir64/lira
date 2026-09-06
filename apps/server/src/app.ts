@@ -22,11 +22,13 @@ import { withIdentity, withTenant } from "./database.js";
 import { Problem } from "./problem.js";
 import { createIssue, listIssues, updateIssue } from "./work.js";
 import { organizationRoutes } from "./organization-routes.js";
+import { notificationRoutes } from "./notification-routes.js";
 import { workflowRoutes } from "./workflow-routes.js";
 import { requireAdmin } from "./policy.js";
 
 export interface AppOptions {
   pool: pg.Pool;
+  assignmentEmailEnabled?: boolean;
   verifyIdentity: VerifyIdentity;
   supabaseUrl: string;
   publicKey: string;
@@ -221,6 +223,11 @@ export async function buildApp(options: AppOptions) {
       );
       await organizationRoutes(api, options.pool);
       await workflowRoutes(api, options.pool);
+      await notificationRoutes(
+        api,
+        options.pool,
+        options.assignmentEmailEnabled,
+      );
       api.get<{ Params: Static<typeof OrgParams> }>(
         "/orgs/:orgId/projects",
         { schema: { params: OrgParams, security } },

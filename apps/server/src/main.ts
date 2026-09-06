@@ -38,6 +38,7 @@ const pool = new pg.Pool({
 await assertRuntimeRole(pool);
 const app = await buildApp({
   pool,
+  assignmentEmailEnabled: process.env.ASSIGNMENT_EMAIL_ENABLED === "true",
   supabaseUrl,
   publicKey,
   verifyIdentity: supabaseVerifier(supabaseUrl, publicKey),

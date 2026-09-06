@@ -36,7 +36,7 @@ Implemented and covered by checks:
 - A deferred PostgreSQL trigger prevents removal/demotion of the final owner even through direct SQL. Teams are organizational groups and grant no project permissions.
 - Invitations currently provide a one-time link for the administrator to share. No automatic email is sent; email delivery is pending the planned worker step. Organization activity is persisted; notification delivery is not implied.
 
-## Current increment: Phase 2 project workflows
+## Completed increment: Phase 2 project workflows
 
 - Desktop task editor for title, description, status, backlog/planned state, priority, assignee, due date, and labels. Saves use version preconditions; conflicts preserve the editor and require refresh before retry.
 - Organization labels and normalized issue-label joins with forced RLS and composite tenant foreign keys. Up to 200 workspace labels and 20 labels per task; creation and application are supported.
@@ -46,11 +46,18 @@ Implemented and covered by checks:
 - Chronological, paginated project activity with actor names and operational field changes. Description changes record only that the body changed, not copies of its contents. Before-values are captured under a row lock.
 - Migration 003 adds labels, joins, search vector and indexes. Existing migrations are unchanged.
 
+## Current increment: durable worker and notification inbox
+
+- Separate tenant-scoped worker role and narrow metadata scheduler functions; leases, fencing, retries, backoff/jitter and eight-attempt failed state.
+- Deduplicated in-app assignment notifications, recipient-only RLS, read/unread API, desktop inbox, and opt-in email preferences.
+- Resend adapter with stable request/key, current-access checks, generic content, delivery age limits and database-backed daily caps. No live provider email has been sent or enabled.
+- Same-image worker entrypoint, restricted-login provisioning, admin failed-job status API, and bounded manual retention tooling. See [operations and limitations](notifications-and-worker.md).
+
 ## Phase 2 next work, in dependency order
 
 1. Validate the new membership flows against the real staging Supabase project, including password reauthentication and invitation onboarding.
 2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search, label rename/removal, and drag-and-drop are not included in this increment; project-scoped search and keyboard ordering are implemented.
-3. Durable worker claiming/leases, retries, idempotent in-app notifications, email provider adapter; current pending outbox events remain unconsumed until this ships.
+3. Deploy and verify the worker/inbox with the real staging provider, then implement encrypted short-lived invitation email delivery. Assignment mail adapter and durable job processing are implemented; automatic invitation mail remains pending.
 4. Comments and attachment metadata/quotas, private storage transfer/validation, independent object backup.
 5. Basic dashboard, two bundled student-club templates, organization export.
 6. Recovery rehearsal, accessibility review, threat-model tests, and a small internal pilot before 50-member rollout.
@@ -64,7 +71,7 @@ Sprints, private projects, configurable workflows, billing, OAuth beyond email, 
 - Organization/member/project listings are capped at 100 for the small internal foundation; full pagination/quotas must ship before larger onboarding. Task pagination and project-wide server search are implemented.
 - Issue detail/priority/assignee/due-date editing and labels now have UI. Comments and uploads remain pending.
 - This increment uses parameterized `pg` queries rather than adding an unused query-builder layer; it follows the plan's PostgreSQL/explicit-transaction approach.
-- Durable outbox records are not a claim of notification delivery. Worker deployment will be added alongside a real consumer.
+- A real consumer is now implemented. Hosted deployment, live email and alert destinations still require staging configuration; in-app tests do not prove provider delivery.
 - Idempotency records are retained until maintenance is implemented. The service currently gives stronger retry retention than the architecture's proposed 24-hour window; retention cleanup must not delete records while requests are active.
 - Task views sort by numeric rank and UUID. Cursors resolve a tenant/project-scoped issue anchor; these are live views, not snapshots. Concurrent movement can change page boundaries; clients invalidate and refetch after writes, and missing anchors require refresh.
 - New issue updates record changed operational fields, label IDs, and description-change markers. Earlier activity rows retain their original, more limited payloads. Membership offboarding events remain intact.

@@ -4,7 +4,7 @@ No production service is created by this repository. Provision staging before in
 
 ## Planned topology
 
-Render web service serving the compiled React app and Fastify API; Supabase PostgreSQL/Auth; a separate worker from the same application codebase in Phase 2. Private storage, email notifications, and billing arrive with their scheduled features. No Redis or additional backend framework is introduced.
+Render web service serving the compiled React app and Fastify API; Supabase PostgreSQL/Auth; a separate worker from the same application codebase. In-app assignment delivery and an opt-in email adapter are implemented; see [worker deployment](notifications-and-worker.md). Private storage and billing remain pending. No Redis or additional backend framework is introduced.
 
 ## Required environment
 
@@ -48,4 +48,4 @@ Configure daily managed database backups, an independent encrypted export, and a
 
 ## Known operational work still pending
 
-Notification worker, upload processing, outbox retry/dead-letter management, retention cleanup, organization export/deletion, third-party error tracking, uptime alert destination, budget alerts, and independent backup automation are not configured yet. Structured API logs and health endpoints are implemented. This foundation must not be advertised as satisfying the complete internal MVP or paid-service operational gates.
+Hosted worker/email configuration, invitation email, upload processing, automated retention cleanup, organization export/deletion, third-party error tracking, uptime alert destination, budget alerts, and independent backup automation are not configured yet. Structured API logs and health endpoints are implemented. This foundation must not be advertised as satisfying the complete internal MVP or paid-service operational gates.

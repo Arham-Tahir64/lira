@@ -4,6 +4,8 @@ const projectId = "00000000-0000-4000-8000-000000000002";
 test("member signs in, creates work, changes status, and switches view", async ({
   page,
 }, testInfo) => {
+  let notificationRead = false;
+  let emailPreference = false;
   let archived: string | null = null;
   const labelId = "00000000-0000-4000-8000-000000000008";
   const memberId = "00000000-0000-4000-8000-000000000009";
@@ -36,6 +38,44 @@ test("member signs in, creates work, changes status, and switches view", async (
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname.endsWith("/notification-preferences")) {
+      if (request.method() === "PUT") {
+        emailPreference = request.postDataJSON().assignmentEmail;
+        return route.fulfill({ status: 204 });
+      }
+      return route.fulfill({
+        json: { assignmentEmail: emailPreference, emailAvailable: true },
+      });
+    }
+    if (
+      url.pathname.endsWith(
+        "/notifications/00000000-0000-4000-8000-000000000099",
+      )
+    ) {
+      notificationRead = request.postDataJSON().read;
+      return route.fulfill({ status: 204 });
+    }
+    if (url.pathname.endsWith("/notifications"))
+      return route.fulfill({
+        json: {
+          items:
+            url.searchParams.get("unread") === "true" && notificationRead
+              ? []
+              : [
+                  {
+                    id: "00000000-0000-4000-8000-000000000099",
+                    project_id: projectId,
+                    issue_id: "task",
+                    title: "Review volunteer schedule",
+                    number: 9,
+                    project_key: "EVENT",
+                    read_at: notificationRead ? new Date().toISOString() : null,
+                    created_at: new Date().toISOString(),
+                  },
+                ],
+          nextCursor: null,
+        },
+      });
     if (url.pathname.endsWith("/me/organizations"))
       return route.fulfill({
         json: [
@@ -160,6 +200,34 @@ test("member signs in, creates work, changes status, and switches view", async (
   await expect(
     page.getByRole("heading", { name: "Welcome week", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Notifications", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Notifications", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Review volunteer schedule", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Email me about assignments", { exact: true }).click();
+  await expect(
+    page.getByLabel("Email me about assignments", { exact: true }),
+  ).toBeChecked();
+  await page.screenshot({
+    path: "work/desktop-notifications.png",
+    animations: "disabled",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Mark read", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Mark unread", exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Unread only", { exact: true }).check();
+  await expect(
+    page.getByText("No unread notifications.", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Unread only", { exact: true }).uncheck();
+  await page.getByRole("button", { name: "Open project", exact: true }).click();
   await page.getByRole("button", { name: "New task", exact: true }).click();
   await page
     .getByLabel("Title", { exact: true })
