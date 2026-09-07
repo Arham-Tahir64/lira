@@ -31,6 +31,7 @@ export const ProjectInput = object({
   description: Type.Optional(Type.String({ maxLength: 5000 })),
 });
 export const IssueInput = object({
+  status: Type.Optional(Status),
   title: Type.String({ minLength: 1, maxLength: 200, pattern: "\\S" }),
   description: Type.Optional(Type.String({ maxLength: 20000 })),
   priority: Type.Optional(Priority),
@@ -204,3 +205,23 @@ export interface Activity {
   created_at: string;
   changes: Record<string, unknown>;
 }
+
+export interface Comment {
+  id: string;
+  issue_id: string;
+  author_membership_id: string;
+  author_name: string;
+  body: string;
+  version: number;
+  created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+}
+export const CommentInput = object({
+  body: Type.String({ minLength: 1, maxLength: 10000, pattern: "\\S" }),
+  clientKey: Uuid,
+});
+export const CommentPatch = object({
+  body: Type.String({ minLength: 1, maxLength: 10000, pattern: "\\S" }),
+});
+export const CommentParams = object({ orgId: Uuid, commentId: Uuid });

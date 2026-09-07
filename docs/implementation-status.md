@@ -41,24 +41,36 @@ Implemented and covered by checks:
 - Desktop task editor for title, description, status, backlog/planned state, priority, assignee, due date, and labels. Saves use version preconditions; conflicts preserve the editor and require refresh before retry.
 - Organization labels and normalized issue-label joins with forced RLS and composite tenant foreign keys. Up to 200 workspace labels and 20 labels per task; creation and application are supported.
 - PostgreSQL generated full-text vector and GIN index for title/description, exact issue-key lookup, and filters for assignee, priority, label, due date, planning state, and status. Search is submitted explicitly and covers the project database, not only loaded rows.
-- Independent 25-item pagination per board column; list pages remain 50. Numeric rank ordering, project-locked moves and gap rebalancing, stale-neighbor and version checks. Keyboard status selection and Move up provide ordering without drag-and-drop; reordering is disabled while filters are applied.
+- Independent 25-item pagination per board column; list pages remain 50. Numeric rank ordering, project-locked moves and gap rebalancing, stale-neighbor and version checks. Keyboard status selection and Move up initially provided ordering; the collaboration increment below adds drag-and-drop and Move down; reordering is disabled while filters are applied.
 - Reversible project archive for administrators or the project lead. Archived tasks remain readable and reject writes at the API. No data is deleted by archiving.
 - Chronological, paginated project activity with actor names and operational field changes. Description changes record only that the body changed, not copies of its contents. Before-values are captured under a row lock.
 - Migration 003 adds labels, joins, search vector and indexes. Existing migrations are unchanged.
 
-## Current increment: durable worker and notification inbox
+## Completed increment: durable worker and notification inbox
 
 - Separate tenant-scoped worker role and narrow metadata scheduler functions; leases, fencing, retries, backoff/jitter and eight-attempt failed state.
 - Deduplicated in-app assignment notifications, recipient-only RLS, read/unread API, desktop inbox, and opt-in email preferences.
 - Resend adapter with stable request/key, current-access checks, generic content, delivery age limits and database-backed daily caps. No live provider email has been sent or enabled.
 - Same-image worker entrypoint, restricted-login provisioning, admin failed-job status API, and bounded manual retention tooling. See [operations and limitations](notifications-and-worker.md).
 
+## Current increment: desktop task board and discussions
+
+The user prioritized core Jira-style task functionality over the next infrastructure work. This increment stays within the planned board, backlog, assignment, and comment scope.
+
+- Board is the default project view. Create a task directly in a status column with an assignee in one transaction; completed tasks are always planned.
+- Drag handles move tasks across columns or before another card. Move up/down and status controls provide keyboard alternatives, with live move announcements. Reordering is disabled during filtering, with an explanation and Clear filters action.
+- Cards display assignee and due date. Send to backlog and Plan task support day-to-day planning without opening the editor.
+- The task editor includes a Discussion tab with paginated safe Markdown comments. Drafts survive switching between Details and Discussion. Raw HTML, unsafe links, and remote images are excluded.
+- Authors can edit/remove their comments; organization administrators can remove others' comments. Version preconditions reject stale edits/deletes. Creation retries are idempotent; archived projects reject comment writes.
+- Migration 005 adds forced-RLS comments with composite tenant/project/issue and author constraints. Deletion immediately scrubs the body and leaves a tombstone; activity records identifiers, never comment bodies. Backups remain subject to their retention period. Comment mentions and notifications are not implemented.
+- Verification: 54 backend/database tests and two desktop browser scenarios cover creation, drag movement, backlog planning, comment lifecycle, Markdown safety, authorization, isolation, concurrent retries, and stale writes. Type checking, lint, formatting and production build pass. React Doctor reports maintainability/iteration advisories; the browser Supabase client is identity-only with public configuration. The approximately 609 kB uncompressed main bundle has a build size warning; route-level splitting remains a future optimization.
+
 ## Phase 2 next work, in dependency order
 
 1. Validate the new membership flows against the real staging Supabase project, including password reauthentication and invitation onboarding.
-2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search, label rename/removal, and drag-and-drop are not included in this increment; project-scoped search and keyboard ordering are implemented.
+2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search and label rename/removal remain pending; project-scoped search and desktop drag/keyboard ordering are implemented.
 3. Deploy and verify the worker/inbox with the real staging provider, then implement encrypted short-lived invitation email delivery. Assignment mail adapter and durable job processing are implemented; automatic invitation mail remains pending.
-4. Comments and attachment metadata/quotas, private storage transfer/validation, independent object backup.
+4. Attachment metadata/quotas, private storage transfer/validation, independent object backup.
 5. Basic dashboard, two bundled student-club templates, organization export.
 6. Recovery rehearsal, accessibility review, threat-model tests, and a small internal pilot before 50-member rollout.
 
@@ -69,7 +81,7 @@ Sprints, private projects, configurable workflows, billing, OAuth beyond email, 
 ## Current limits to carry forward
 
 - Organization/member/project listings are capped at 100 for the small internal foundation; full pagination/quotas must ship before larger onboarding. Task pagination and project-wide server search are implemented.
-- Issue detail/priority/assignee/due-date editing and labels now have UI. Comments and uploads remain pending.
+- Issue detail/priority/assignee/due-date editing and labels now have UI. Comments now have a discussion UI; uploads remain pending.
 - This increment uses parameterized `pg` queries rather than adding an unused query-builder layer; it follows the plan's PostgreSQL/explicit-transaction approach.
 - A real consumer is now implemented. Hosted deployment, live email and alert destinations still require staging configuration; in-app tests do not prove provider delivery.
 - Idempotency records are retained until maintenance is implemented. The service currently gives stronger retry retention than the architecture's proposed 24-hour window; retention cleanup must not delete records while requests are active.

@@ -111,7 +111,7 @@ export async function createIssue(
   }
   await assigneeAccess(tx, orgId, input.assigneeMembershipId);
   const { rows } = await tx.query<Issue>(
-    `INSERT INTO app.issues(org_id,project_id,number,title,description,priority,planning_state,assignee_membership_id,creator_membership_id,due_date,rank) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,(SELECT COALESCE(max(rank),0)+1024 FROM app.issues WHERE org_id=$1 AND project_id=$2)) RETURNING ${fields}`,
+    `INSERT INTO app.issues(org_id,project_id,number,title,description,priority,planning_state,assignee_membership_id,creator_membership_id,due_date,status,rank) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,(SELECT COALESCE(max(rank),0)+1024 FROM app.issues WHERE org_id=$1 AND project_id=$2)) RETURNING ${fields}`,
     [
       orgId,
       projectId,
@@ -123,6 +123,7 @@ export async function createIssue(
       input.assigneeMembershipId ?? null,
       member.id,
       input.dueDate ?? null,
+      input.status ?? "todo",
     ],
   );
   const issue = rows[0]!;

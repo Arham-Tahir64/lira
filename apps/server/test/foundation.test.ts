@@ -559,6 +559,136 @@ describe("real PostgreSQL foundation", () => {
     ).toBe(404);
   });
 
+  it("creates tasks directly in their chosen board status with assignment", async () => {
+    const result = await issue("Already underway", {
+      status: "in_progress",
+      assigneeMembershipId: memberA,
+    });
+    expect(result.statusCode, result.body).toBe(201);
+    expect(result.json().status).toBe("in_progress");
+    expect(result.json().assignee_membership_id).toBe(memberA);
+    expect(
+      (
+        await issue("Invalid completed backlog", {
+          status: "done",
+          planningState: "backlog",
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+  it("creates comments idempotently and paginates only the requested issue", async () => {
+    const task = (await issue("Discussion task")).json();
+    const url = `/api/v1/orgs/${orgA}/issues/${task.id}/comments`;
+    const payload = {
+      body: "**Book** the venue <script>bad()</script>",
+      clientKey: randomUUID(),
+    };
+    const post = () =>
+      app.inject({ method: "POST", url, headers: headers(member), payload });
+    const results = await Promise.all([post(), post()]);
+    expect(results.map((r) => r.statusCode)).toEqual([201, 201]);
+    expect(results[0].json().id).toBe(results[1].json().id);
+    await app.inject({
+      method: "POST",
+      url,
+      headers: headers(),
+      payload: { body: "Agreed", clientKey: randomUUID() },
+    });
+    const first = (
+      await app.inject({ url: `${url}?limit=1`, headers: headers() })
+    ).json();
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0].body).toBe(payload.body);
+    const next = (
+      await app.inject({
+        url: `${url}?limit=1&after=${first.nextCursor}`,
+        headers: headers(),
+      })
+    ).json();
+    expect(next.items[0].body).toBe("Agreed");
+    expect((await app.inject({ url, headers: headers(bob) })).statusCode).toBe(
+      404,
+    );
+    expect((await pool.query("SELECT * FROM app.comments")).rowCount).toBe(0);
+    await withTenant(pool, bob, orgB, async (tx) =>
+      expect((await tx.query("SELECT * FROM app.comments")).rowCount).toBe(0),
+    );
+    expect(
+      (
+        await admin.query(
+          "SELECT changes FROM app.activity_events WHERE issue_id=$1 AND action='comment.created'",
+          [task.id],
+        )
+      ).rows.every((r) => !JSON.stringify(r).includes("venue")),
+    ).toBe(true);
+  });
+  it("enforces comment ownership, versions, admin removal and archived read-only behavior", async () => {
+    const task = (await issue("Comment permissions")).json();
+    const url = `/api/v1/orgs/${orgA}/issues/${task.id}/comments`;
+    const created = await app.inject({
+      method: "POST",
+      url,
+      headers: headers(member),
+      payload: { body: "First draft", clientKey: randomUUID() },
+    });
+    const commentUrl = `/api/v1/orgs/${orgA}/comments/${created.json().id}`;
+    const patch = (who = member, version = 1) =>
+      app.inject({
+        method: "PATCH",
+        url: commentUrl,
+        headers: { ...headers(who), "if-match": `"${version}"` },
+        payload: { body: "Edited draft" },
+      });
+    expect((await patch(alice)).statusCode).toBe(403);
+    expect((await patch()).statusCode).toBe(204);
+    expect((await patch()).statusCode).toBe(412);
+    await admin.query("UPDATE app.projects SET archived_at=now() WHERE id=$1", [
+      projectA,
+    ]);
+    expect((await patch(member, 2)).statusCode).toBe(409);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url,
+          headers: headers(member),
+          payload: { body: "Blocked", clientKey: randomUUID() },
+        })
+      ).statusCode,
+    ).toBe(409);
+    await admin.query("UPDATE app.projects SET archived_at=NULL WHERE id=$1", [
+      projectA,
+    ]);
+    expect(
+      (
+        await app.inject({
+          method: "DELETE",
+          url: commentUrl,
+          headers: { ...headers(), "if-match": '"2"' },
+        })
+      ).statusCode,
+    ).toBe(204);
+    const deleted = (await app.inject({ url, headers: headers() })).json()
+      .items[0];
+    expect(deleted.deleted_at).toBeTruthy();
+    expect(deleted.body).toBe("");
+    expect(
+      (
+        await admin.query("SELECT body FROM app.comments WHERE id=$1", [
+          deleted.id,
+        ])
+      ).rows[0].body,
+    ).toBe("");
+    await expect(
+      withTenant(pool, alice, orgA, async (tx, m) =>
+        tx.query(
+          "INSERT INTO app.comments(org_id,project_id,issue_id,author_membership_id,body,client_key) VALUES($1,$2,$3,$4,$5,$6)",
+          [orgA, projectB, task.id, m.id, "Cross project", randomUUID()],
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+  });
+
   it("revokes API access immediately on logout", async () => {
     expect(
       (

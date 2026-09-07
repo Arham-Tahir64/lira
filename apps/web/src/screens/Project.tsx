@@ -35,7 +35,7 @@ export function ProjectView({
   org: Organization;
   project: Project;
 }) {
-  const [view, setView] = useState<"list" | "board" | "activity">("list");
+  const [view, setView] = useState<"list" | "board" | "activity">("board");
   const [planning, setPlanning] = useState<"planned" | "backlog">("planned");
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
@@ -63,6 +63,8 @@ export function ProjectView({
     queryFn: () => backend.api<RosterMember[]>(`/orgs/${org.id}/members`),
   });
   const [create, setCreate] = useState(false);
+  const [createStatus, setCreateStatus] = useState<IssueStatus>("todo");
+  const [dragged, setDragged] = useState<Issue | null>(null);
   const [detail, setDetail] = useState<Issue | null>(null);
   const cache = useQueryClient();
   const queryKey = ["issues", org.id, project.id, planning, filters];
@@ -123,7 +125,10 @@ export function ProjectView({
         <button
           className="primary"
           disabled={!!project.archived_at}
-          onClick={() => setCreate(true)}
+          onClick={() => {
+            setCreateStatus("todo");
+            setCreate(true);
+          }}
         >
           <Plus size={16} />
           New task
@@ -261,6 +266,28 @@ export function ProjectView({
           />
         </label>
       </div>
+      {view === "board" && (
+        <p className="hint">
+          {filters
+            ? "Clear filters to drag or reorder tasks. Status and planning controls remain available."
+            : "Drag a handle to another column or before a task. Move up/down and status controls work with the keyboard."}
+        </p>
+      )}
+      {filters && (
+        <button
+          className="text-button"
+          onClick={() => {
+            setSearch("");
+            setSubmittedSearch("");
+            setAssignee("");
+            setPriority("");
+            setLabel("");
+            setDueBefore("");
+          }}
+        >
+          Clear filters
+        </button>
+      )}
       {issues.error && <Notice>{message(issues.error)}</Notice>}
       {update.error && <Notice>{message(update.error)}</Notice>}
       {view === "activity" ? (
@@ -283,6 +310,12 @@ export function ProjectView({
               filters={filters}
               archived={!!project.archived_at}
               onOpen={setDetail}
+              onCreate={(status) => {
+                setCreateStatus(status);
+                setCreate(true);
+              }}
+              dragged={dragged}
+              onDrag={setDragged}
             />
           ))}
         </div>
@@ -299,7 +332,10 @@ export function ProjectView({
           <p>Try another search or add a task to {project.name}.</p>
           <button
             disabled={!!project.archived_at}
-            onClick={() => setCreate(true)}
+            onClick={() => {
+              setCreateStatus("todo");
+              setCreate(true);
+            }}
           >
             <Plus size={15} />
             Add a task
@@ -361,7 +397,8 @@ export function ProjectView({
           backend={backend}
           orgId={org.id}
           projectId={project.id}
-          planning={planning}
+          planning={createStatus === "done" ? "planned" : planning}
+          initialStatus={createStatus}
           onClose={() => setCreate(false)}
         />
       )}{" "}
@@ -382,15 +419,21 @@ function CreateTask({
   orgId,
   projectId,
   planning,
+  initialStatus,
   onClose,
 }: {
   backend: Backend;
   orgId: string;
   projectId: string;
   planning: string;
+  initialStatus: IssueStatus;
   onClose: () => void;
 }) {
   const cache = useQueryClient();
+  const members = useQuery({
+    queryKey: ["members", orgId],
+    queryFn: () => backend.api<RosterMember[]>(`/orgs/${orgId}/members`),
+  });
   const request = useRef<{ body: string; key: string } | null>(null);
   const mutation = useMutation({
     mutationFn: (body: string) => {
@@ -417,11 +460,17 @@ function CreateTask({
         priority: text(form, "priority"),
         dueDate: text(form, "dueDate") || null,
         planningState: planning,
+        status: initialStatus,
+        assigneeMembershipId: text(form, "assignee") || null,
       }),
     );
   }
   return (
     <Dialog title="Create task" onClose={onClose}>
+      <p className="hint">
+        {statuses[initialStatus]} ·{" "}
+        {planning === "backlog" ? "Backlog" : "Planned work"}
+      </p>
       <form onSubmit={submit}>
         <label>
           Title
@@ -456,6 +505,24 @@ function CreateTask({
             <input name="dueDate" type="date" />
           </label>
         </div>
+        <label>
+          Assignee
+          <select
+            name="assignee"
+            defaultValue=""
+            disabled={members.isPending || !!members.error}
+          >
+            <option value="">Unassigned</option>
+            {members.data
+              ?.filter((m) => m.state === "active")
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}
+                </option>
+              ))}
+          </select>
+        </label>
+        {members.error && <Notice>{message(members.error)}</Notice>}
         {mutation.error && <Notice>{message(mutation.error)}</Notice>}
         <footer>
           <button type="button" onClick={onClose}>

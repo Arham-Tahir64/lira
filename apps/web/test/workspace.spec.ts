@@ -10,6 +10,7 @@ test("member signs in, creates work, changes status, and switches view", async (
   const labelId = "00000000-0000-4000-8000-000000000008";
   const memberId = "00000000-0000-4000-8000-000000000009";
   let appliedLabels: string[] = [];
+  const comments: Array<Record<string, unknown>> = [];
   const issues: Array<Record<string, unknown>> = [];
   const session = {
     access_token: `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ sub: "00000000-0000-4000-8000-000000000003", exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url")}.fixture`,
@@ -38,6 +39,56 @@ test("member signs in, creates work, changes status, and switches view", async (
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname.endsWith("/comments")) {
+      if (request.method() === "POST") {
+        const body = request.postDataJSON();
+        const comment = {
+          id: crypto.randomUUID(),
+          issue_id: url.pathname.split("/").at(-2),
+          author_membership_id: memberId,
+          author_name: "Alex",
+          body: body.body,
+          version: 1,
+          created_at: new Date().toISOString(),
+          edited_at: null,
+          deleted_at: null,
+        };
+        comments.push(comment);
+        return route.fulfill({ status: 201, json: { id: comment.id } });
+      }
+      return route.fulfill({ json: { items: comments, nextCursor: null } });
+    }
+    if (url.pathname.includes("/comments/")) {
+      const comment = comments.find((c) =>
+        url.pathname.endsWith(String(c.id)),
+      )!;
+      expect(request.headers()["if-match"]).toBe(`"${comment.version}"`);
+      comment.version = Number(comment.version) + 1;
+      if (request.method() === "DELETE") {
+        comment.body = "";
+        comment.deleted_at = new Date().toISOString();
+      } else {
+        comment.body = request.postDataJSON().body;
+        comment.edited_at = new Date().toISOString();
+      }
+      return route.fulfill({ status: 204 });
+    }
+    if (url.pathname.endsWith("/move")) {
+      const id = url.pathname.split("/").at(-2);
+      const issue = issues.find((i) => i.id === id)!;
+      const body = request.postDataJSON();
+      expect(body.expectedVersion).toBe(issue.version);
+      Object.assign(issue, {
+        status: body.status,
+        planning_state: body.planningState,
+        version: Number(issue.version) + 1,
+      });
+      issues.splice(issues.indexOf(issue), 1);
+      const index = issues.findIndex((i) => i.id === body.beforeId);
+      if (index < 0) issues.push(issue);
+      else issues.splice(index, 0, issue);
+      return route.fulfill({ json: issue });
+    }
     if (url.pathname.endsWith("/notification-preferences")) {
       if (request.method() === "PUT") {
         emailPreference = request.postDataJSON().assignmentEmail;
@@ -152,6 +203,8 @@ test("member signs in, creates work, changes status, and switches view", async (
             (i) =>
               (!url.searchParams.get("status") ||
                 i.status === url.searchParams.get("status")) &&
+              (!url.searchParams.get("planningState") ||
+                i.planning_state === url.searchParams.get("planningState")) &&
               (!url.searchParams.get("q") ||
                 String(i.title).includes(url.searchParams.get("q")!)),
           ),
@@ -166,8 +219,9 @@ test("member signs in, creates work, changes status, and switches view", async (
         number: issues.length + 1,
         title: body.title,
         description: body.description,
-        status: "todo",
-        planning_state: "planned",
+        status: body.status ?? "todo",
+        planning_state: body.planningState ?? "planned",
+        assignee_membership_id: body.assigneeMembershipId ?? null,
         priority: body.priority,
         due_date: body.dueDate,
         version: 1,
@@ -278,6 +332,44 @@ test("member signs in, creates work, changes status, and switches view", async (
     animations: "disabled",
     fullPage: true,
   });
+  await dialog.getByRole("button", { name: "Discussion", exact: true }).click();
+  await dialog
+    .getByLabel("Add a comment", { exact: true })
+    .fill(
+      "**Venue booked**. [Unsafe](javascript:alert(1)) <script>window.bad=1</script> ![tracker](https://tracker.example/x)",
+    );
+  await dialog
+    .getByRole("button", { name: "Post comment", exact: true })
+    .click();
+  await expect(
+    dialog.locator("strong").filter({ hasText: "Venue booked" }),
+  ).toBeVisible();
+  await expect(dialog.locator("script,img")).toHaveCount(0);
+  expect(
+    await dialog.getByRole("link", { name: "Unsafe" }).getAttribute("href"),
+  ).not.toMatch(/^javascript:/i);
+  await dialog.getByRole("button", { name: "Edit", exact: true }).click();
+  await dialog
+    .getByRole("textbox", { name: "Edit comment", exact: true })
+    .fill("**Venue confirmed** — capacity is 80.");
+  await dialog
+    .getByRole("button", { name: "Save comment", exact: true })
+    .click();
+  await expect(
+    dialog.locator("strong").filter({ hasText: "Venue confirmed" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "work/desktop-discussion.png",
+    animations: "disabled",
+    fullPage: true,
+  });
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Confirm delete", exact: true })
+    .click();
+  await expect(
+    dialog.getByText("Comment removed", { exact: true }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "List view", exact: true }).click();
@@ -306,6 +398,55 @@ test("member signs in, creates work, changes status, and switches view", async (
     page.getByRole("button", { name: "New task", exact: true }),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Board view", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Add task to in progress", exact: false })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByLabel("Title", { exact: true })
+    .fill("Recruit volunteers");
+  await page
+    .getByRole("dialog")
+    .getByRole("combobox", { name: "Assignee", exact: true })
+    .selectOption(memberId);
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Create task", exact: true })
+    .click();
+  await expect(
+    page
+      .getByLabel("In progress column")
+      .getByText("Recruit volunteers", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Drag Recruit volunteers", { exact: true })
+    .dragTo(page.getByLabel("To do column", { exact: true }));
+  await expect(
+    page
+      .getByLabel("To do column")
+      .getByText("Recruit volunteers", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("To do column")
+    .getByRole("button", { name: "Send to backlog", exact: true })
+    .click();
+  await expect(
+    page.getByText("Recruit volunteers", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Backlog", exact: true }).click();
+  await expect(
+    page.getByText("Recruit volunteers", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Plan task", exact: true }).click();
+  await expect(
+    page.getByText("Recruit volunteers", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: /^Tasks/ }).click();
+  await expect(
+    page
+      .getByLabel("To do column")
+      .getByText("Recruit volunteers", { exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
