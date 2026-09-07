@@ -2,6 +2,8 @@ import pg from "pg";
 import { setTimeout as delay } from "node:timers/promises";
 import { assertWorkerRole, claimJob, processJob } from "./worker.js";
 import { resendAdapter } from "./email.js";
+import { storageFromEnvironment } from "./storage.js";
+const attachments = await storageFromEnvironment();
 const connectionString = process.env.WORKER_DATABASE_URL;
 if (!connectionString) throw new Error("WORKER_DATABASE_URL is required.");
 const url = new URL(connectionString);
@@ -62,6 +64,7 @@ try {
       }
       const completed = await processJob(pool, job, {
         appUrl,
+        attachments,
         emailDailyLimit,
         suppressEmail: !emailEnabled,
         emailFrom: emailEnabled ? process.env.EMAIL_FROM : undefined,

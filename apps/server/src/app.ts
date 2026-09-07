@@ -27,7 +27,10 @@ import { notificationRoutes } from "./notification-routes.js";
 import { workflowRoutes } from "./workflow-routes.js";
 import { requireAdmin } from "./policy.js";
 
+import { attachmentRoutes } from "./attachment-routes.js";
+import type { AttachmentOptions } from "./storage.js";
 export interface AppOptions {
+  attachments?: AttachmentOptions;
   pool: pg.Pool;
   assignmentEmailEnabled?: boolean;
   verifyIdentity: VerifyIdentity;
@@ -225,6 +228,7 @@ export async function buildApp(options: AppOptions) {
       await organizationRoutes(api, options.pool);
       await workflowRoutes(api, options.pool);
       await commentRoutes(api, options.pool);
+      await attachmentRoutes(api, options.pool, options.attachments);
       await notificationRoutes(
         api,
         options.pool,

@@ -2,7 +2,7 @@
 
 A lightweight, multi-tenant project workspace for student clubs. Built against the accepted [software architecture](docs/software-architecture.md).
 
-**Status: foundation, membership/teams, project workflows, task-board collaboration, and worker/inbox implemented; staging validation pending.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
+**Status: foundation, membership/teams, project workflows, task-board collaboration, attachments, and worker/inbox implemented; staging validation pending.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
 
 **Product priority: laptop/desktop first.** New interface work and release verification target desktop browsers. Mobile-specific design and verification are deferred unless demand warrants them.
 
@@ -18,6 +18,8 @@ A lightweight, multi-tenant project workspace for student clubs. Built against t
 - Desktop task editing/assignment, organization labels, PostgreSQL project search and filters, independently paginated board columns, drag-and-drop and keyboard ordering, per-column creation, assignee/due-date cards, reversible project archive, and paginated activity history.
 
 - Task discussions with safe Markdown, author editing, administrator removal, version conflicts, and paginated history.
+
+- Private task attachments with signed transfers, worker validation, workspace quotas, and retryable removal. Uploads require explicit internal-pilot configuration; see [storage setup and release gates](docs/attachments.md).
 
 ## Start locally
 

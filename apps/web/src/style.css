@@ -1189,3 +1189,22 @@ dialog.issue-editor {
   white-space: nowrap;
   border: 0;
 }
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.attachment-row > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.attachment-row p {
+  margin: 6px 0 0;
+}
+.attachments-panel form {
+  margin-top: 24px;
+}

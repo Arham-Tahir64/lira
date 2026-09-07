@@ -45,3 +45,11 @@ The PostgreSQL/identity/worker suite passes 51 tests. New checks exercise runtim
 Email tests use fake transport; no external recipient was contacted. Real Resend delivery, hosted worker termination/recovery and an authorized retention rehearsal remain staging gates.
 
 Retention checks also verify that preview mode is read-only, old rows are removed only in apply mode, and pending jobs survive cleanup. React Doctor reports advisory complexity and bounded-iteration findings; the new inbox introduces no direct domain database access or scanner bug findings.
+
+## Task board and attachment increments
+
+The task-board/comment increment passed 54 backend tests and two desktop browser scenarios. The attachment increment expands the suite to 64 tests: real PostgreSQL checks cover concurrent quota reservations, idempotent upload reservations, tenant RLS and composite references, upload ownership, revoked membership, archived projects, checksum/signature rejection, expiry, deletion during validation, stale worker leases, retryable provider deletion, and preserving failed cleanup jobs. Adapter tests cover bucket privacy, path validation, signed transfer parameters and bounded reads. Provider traffic is a fixture; no live files were uploaded.
+
+The desktop workspace scenario now exercises file selection, SHA-256 reservation, direct transfer without an application bearer token, quarantine UI, ready download and removal. Attachment layout was visually reviewed at desktop size. Type checking, lint, formatting and build are release checks. React Doctor's array-index notice finding was corrected with stable error rendering; bounded list iteration and existing component-complexity warnings remain advisories. The browser Supabase client still handles identity only; domain metadata goes through Fastify and file bytes through scoped storage capabilities. The main bundle remains above Vite's advisory 500 kB threshold.
+
+Live provider restrictions, capability expiry, overwrite behavior, download disposition and independent object restore remain explicit staging gates in the attachment runbook. Malware scanning is not present; outside-club uploads are disabled.

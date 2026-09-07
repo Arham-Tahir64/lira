@@ -32,7 +32,7 @@ An operator should inspect a failed job, correct the cause, and use a one-off da
 
 ## Retention
 
-`npm run maintenance:notifications` reports eligible counts using a one-off migration/maintenance credential. `npm run maintenance:notifications -- --apply` deletes at most 500 eligible rows per table per invocation: email intents after seven days, notifications after 90 days, completed jobs after seven days, failed jobs after 30 days from creation, and reservations after 30 days. It never deletes activity history or pending/processing jobs. It is not scheduled automatically; review the counts and run it operationally until a managed maintenance schedule is authorized. No runtime gets this credential.
+`npm run maintenance:notifications` reports eligible counts using a one-off migration/maintenance credential. `npm run maintenance:notifications -- --apply` deletes at most 500 eligible rows per table per invocation: email intents after seven days, notifications after 90 days, completed jobs after seven days, non-attachment failed jobs after 30 days from creation, and reservations after 30 days. It never deletes activity history, pending/processing jobs, or failed attachment jobs that may still be required for cleanup. It is not scheduled automatically; review the counts and run it operationally until a managed maintenance schedule is authorized. No runtime gets this credential.
 
 ## Remaining delivery work
 

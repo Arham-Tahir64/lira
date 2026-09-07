@@ -10,6 +10,7 @@ test("member signs in, creates work, changes status, and switches view", async (
   const labelId = "00000000-0000-4000-8000-000000000008";
   const memberId = "00000000-0000-4000-8000-000000000009";
   let appliedLabels: string[] = [];
+  const attachments: Array<Record<string, unknown>> = [];
   const comments: Array<Record<string, unknown>> = [];
   const issues: Array<Record<string, unknown>> = [];
   const session = {
@@ -36,9 +37,76 @@ test("member signs in, creates work, changes status, and switches view", async (
   await page.route("https://fixture.supabase.co/auth/v1/**", (route) =>
     route.fulfill({ json: session }),
   );
+  await page.route(
+    "https://fixture.supabase.co/storage/v1/**",
+    async (route) => {
+      expect(route.request().headers().authorization).toBeUndefined();
+      if (route.request().method() === "PUT")
+        return route.fulfill({ status: 200, json: { Key: "fixture" } });
+      return route.fulfill({
+        status: 200,
+        headers: {
+          "Content-Disposition": 'attachment; filename="handoff.txt"',
+        },
+        body: "Club handoff notes",
+      });
+    },
+  );
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname.endsWith("/attachments")) {
+      if (request.method() === "POST") {
+        const body = request.postDataJSON();
+        expect(body.checksum).toMatch(/^[a-f0-9]{64}$/);
+        const item = {
+          id: crypto.randomUUID(),
+          name: body.name,
+          bytes: body.bytes,
+          media_type: body.mediaType,
+          state: "pending",
+          uploader_membership_id: memberId,
+          created_at: new Date().toISOString(),
+          rejection: null,
+        };
+        attachments.push(item);
+        return route.fulfill({
+          status: 201,
+          json: {
+            id: item.id,
+            uploadUrl:
+              "https://fixture.supabase.co/storage/v1/object/upload/sign/fixture?token=fixture",
+          },
+        });
+      }
+      return route.fulfill({
+        json: {
+          items: attachments,
+          nextCursor: null,
+          uploadEnabled: true,
+          usedBytes: attachments.length * 10485760,
+          quotaBytes: 1073741824,
+          maxFileBytes: 10485760,
+        },
+      });
+    }
+    if (url.pathname.includes("/attachments/")) {
+      const item = attachments.find((a) =>
+        url.pathname.includes(String(a.id)),
+      )!;
+      if (url.pathname.endsWith("/complete")) {
+        item.state = "quarantined";
+        return route.fulfill({ json: { state: item.state } });
+      }
+      if (url.pathname.endsWith("/download"))
+        return route.fulfill({
+          json: {
+            url: "https://fixture.supabase.co/storage/v1/object/sign/fixture?token=fixture&download=handoff.txt",
+          },
+        });
+      item.state = "deleting";
+      return route.fulfill({ status: 204 });
+    }
     if (url.pathname.endsWith("/comments")) {
       if (request.method() === "POST") {
         const body = request.postDataJSON();
@@ -370,6 +438,45 @@ test("member signs in, creates work, changes status, and switches view", async (
   await expect(
     dialog.getByText("Comment removed", { exact: true }),
   ).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Attachments", exact: true })
+    .click();
+  await dialog.getByLabel("Choose attachment").setInputFiles({
+    name: "handoff.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Club handoff notes"),
+  });
+  await dialog
+    .getByRole("button", { name: "Upload attachment", exact: true })
+    .click();
+  await expect(dialog.getByText("handoff.txt", { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/Validating/)).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Download", exact: true }),
+  ).toHaveCount(0);
+  attachments[0]!.state = "ready";
+  await dialog
+    .getByRole("button", { name: "Refresh attachments", exact: true })
+    .click();
+  await expect(
+    dialog.getByRole("button", { name: "Download", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "work/desktop-attachments.png",
+    animations: "disabled",
+    fullPage: true,
+  });
+  const downloaded = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Download", exact: true }).click();
+  expect((await downloaded).suggestedFilename()).toBe("handoff.txt");
+  await dialog.getByRole("button", { name: "Remove", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Confirm remove", exact: true })
+    .click();
+  await expect(dialog.getByText(/Removed · cleanup pending/)).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Download", exact: true }),
+  ).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "List view", exact: true }).click();

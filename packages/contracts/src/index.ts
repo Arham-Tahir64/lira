@@ -225,3 +225,45 @@ export const CommentPatch = object({
   body: Type.String({ minLength: 1, maxLength: 10000, pattern: "\\S" }),
 });
 export const CommentParams = object({ orgId: Uuid, commentId: Uuid });
+
+export const AttachmentInput = Type.Object(
+  {
+    name: Type.String({
+      minLength: 1,
+      maxLength: 180,
+      pattern: "^[^/\\\\\\x00-\\x1f\\x7f]+$",
+    }),
+    mediaType: Type.Union([
+      Type.Literal("application/pdf"),
+      Type.Literal("image/png"),
+      Type.Literal("image/jpeg"),
+      Type.Literal("text/plain"),
+    ]),
+    bytes: Type.Integer({ minimum: 1, maximum: 10485760 }),
+    checksum: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+    clientKey: Uuid,
+  },
+  { additionalProperties: false },
+);
+export const AttachmentParams = Type.Object(
+  { orgId: Uuid, attachmentId: Uuid },
+  { additionalProperties: false },
+);
+export interface Attachment {
+  id: string;
+  name: string;
+  media_type: string;
+  bytes: number;
+  state: "pending" | "quarantined" | "ready" | "deleting" | "deleted";
+  uploader_membership_id: string;
+  created_at: string;
+  rejection: string | null;
+}
+export interface AttachmentList {
+  items: Attachment[];
+  nextCursor: string | null;
+  uploadEnabled: boolean;
+  usedBytes: number;
+  quotaBytes: number;
+  maxFileBytes: number;
+}

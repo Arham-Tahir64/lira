@@ -53,7 +53,7 @@ Implemented and covered by checks:
 - Resend adapter with stable request/key, current-access checks, generic content, delivery age limits and database-backed daily caps. No live provider email has been sent or enabled.
 - Same-image worker entrypoint, restricted-login provisioning, admin failed-job status API, and bounded manual retention tooling. See [operations and limitations](notifications-and-worker.md).
 
-## Current increment: desktop task board and discussions
+## Completed increment: desktop task board and discussions
 
 The user prioritized core Jira-style task functionality over the next infrastructure work. This increment stays within the planned board, backlog, assignment, and comment scope.
 
@@ -65,12 +65,21 @@ The user prioritized core Jira-style task functionality over the next infrastruc
 - Migration 005 adds forced-RLS comments with composite tenant/project/issue and author constraints. Deletion immediately scrubs the body and leaves a tombstone; activity records identifiers, never comment bodies. Backups remain subject to their retention period. Comment mentions and notifications are not implemented.
 - Verification: 54 backend/database tests and two desktop browser scenarios cover creation, drag movement, backlog planning, comment lifecycle, Markdown safety, authorization, isolation, concurrent retries, and stale writes. Type checking, lint, formatting and production build pass. React Doctor reports maintainability/iteration advisories; the browser Supabase client is identity-only with public configuration. The approximately 609 kB uncompressed main bundle has a build size warning; route-level splitting remains a future optimization.
 
+## Current increment: task attachments
+
+- Desktop Attachments tab supports direct upload, validation status, fresh-authorized download and confirmed removal. Supports PDF, PNG, JPEG and UTF-8 text; no inline previews.
+- Private Supabase Storage adapter verifies bucket restrictions at startup. Uploads require an explicit internal-pilot organization allowlist in both API and worker configuration. External uploads remain disabled pending malware scanning.
+- Migration 006 introduces attachment metadata with forced RLS, composite tenant/project/issue and uploader constraints, idempotent reservation keys and charged byte accounting. Atomic reservations cap workspace storage at 1 GB and reserve the full 10 MB provider limit per pending upload; counts cap at 50 per issue and 500 per workspace.
+- Worker validation checks actual byte count, SHA-256 and content signature before publication. Expiry, rejection and removal use durable cleanup jobs, fenced writes and provider retries; failed attachment jobs survive notification retention.
+- Signed downloads last 60 seconds. Physical deletion waits until upload capabilities have expired; metadata and reserved quota remain until successful cleanup. Archive/read-only and uploader/admin permissions follow existing project policy.
+- See [configuration, lifecycle, backup and provider release gates](attachments.md). Live bucket provisioning, independent backup copy/restore rehearsal and external malware scanning are not completed by fixture tests.
+
 ## Phase 2 next work, in dependency order
 
 1. Validate the new membership flows against the real staging Supabase project, including password reauthentication and invitation onboarding.
 2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search and label rename/removal remain pending; project-scoped search and desktop drag/keyboard ordering are implemented.
 3. Deploy and verify the worker/inbox with the real staging provider, then implement encrypted short-lived invitation email delivery. Assignment mail adapter and durable job processing are implemented; automatic invitation mail remains pending.
-4. Attachment metadata/quotas, private storage transfer/validation, independent object backup.
+4. Verify the attachment provider flow in staging and complete independent object backup and restore rehearsal. Metadata, quotas, transfer UI and worker validation/cleanup are implemented.
 5. Basic dashboard, two bundled student-club templates, organization export.
 6. Recovery rehearsal, accessibility review, threat-model tests, and a small internal pilot before 50-member rollout.
 
@@ -81,7 +90,7 @@ Sprints, private projects, configurable workflows, billing, OAuth beyond email, 
 ## Current limits to carry forward
 
 - Organization/member/project listings are capped at 100 for the small internal foundation; full pagination/quotas must ship before larger onboarding. Task pagination and project-wide server search are implemented.
-- Issue detail/priority/assignee/due-date editing and labels now have UI. Comments now have a discussion UI; uploads remain pending.
+- Issue detail/priority/assignee/due-date editing and labels now have UI. Comments and attachments now have UI. Live storage configuration and backup rehearsal remain pending.
 - This increment uses parameterized `pg` queries rather than adding an unused query-builder layer; it follows the plan's PostgreSQL/explicit-transaction approach.
 - A real consumer is now implemented. Hosted deployment, live email and alert destinations still require staging configuration; in-app tests do not prove provider delivery.
 - Idempotency records are retained until maintenance is implemented. The service currently gives stronger retry retention than the architecture's proposed 24-hour window; retention cleanup must not delete records while requests are active.

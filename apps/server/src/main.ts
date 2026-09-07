@@ -5,6 +5,7 @@ import { supabaseVerifier } from "./identity.js";
 import { assertRuntimeRole } from "./database.js";
 import { Problem } from "./problem.js";
 import { assertPublicSupabaseKey } from "./configuration.js";
+import { storageFromEnvironment } from "./storage.js";
 function required(key: string) {
   const value = process.env[key];
   if (!value)
@@ -38,6 +39,7 @@ const pool = new pg.Pool({
 await assertRuntimeRole(pool);
 const app = await buildApp({
   pool,
+  attachments: await storageFromEnvironment(),
   assignmentEmailEnabled: process.env.ASSIGNMENT_EMAIL_ENABLED === "true",
   supabaseUrl,
   publicKey,

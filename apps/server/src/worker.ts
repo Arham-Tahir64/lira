@@ -1,5 +1,7 @@
 import type pg from "pg";
 import { DeliveryError, type SendEmail, type EmailRequest } from "./email.js";
+import { processAttachment } from "./attachment-worker.js";
+import type { AttachmentOptions } from "./storage.js";
 export interface ClaimedJob {
   id: string;
   org_id: string;
@@ -75,6 +77,7 @@ interface Delivery {
   request: EmailRequest;
 }
 export interface WorkerOptions {
+  attachments?: AttachmentOptions;
   sendEmail?: SendEmail;
   emailFrom?: string;
   appUrl: string;
@@ -87,6 +90,26 @@ export async function processJob(
   options: WorkerOptions,
 ) {
   try {
+    const kind = await scoped(
+      pool,
+      job,
+      async (tx) =>
+        (
+          await tx.query(
+            "SELECT type FROM app.outbox_jobs WHERE org_id=$1 AND id=$2",
+            [job.org_id, job.id],
+          )
+        ).rows[0]?.type as string | undefined,
+    );
+    if (kind?.startsWith("attachment.")) {
+      await processAttachment(
+        job.org_id,
+        job.id,
+        (fn) => scoped(pool, job, fn),
+        options.attachments,
+      );
+      return await finishJob(pool, job);
+    }
     const delivery = await scoped(pool, job, async (tx) => {
       const result = await tx.query(
         `SELECT j.type,e.id AS event_id,e.changes,e.actor_membership_id,e.created_at,i.id AS issue_id,i.project_id,i.assignee_membership_id,p.archived_at

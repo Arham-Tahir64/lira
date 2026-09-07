@@ -49,3 +49,7 @@ Configure daily managed database backups, an independent encrypted export, and a
 ## Known operational work still pending
 
 Hosted worker/email configuration, invitation email, upload processing, automated retention cleanup, organization export/deletion, third-party error tracking, uptime alert destination, budget alerts, and independent backup automation are not configured yet. Structured API logs and health endpoints are implemented. This foundation must not be advertised as satisfying the complete internal MVP or paid-service operational gates.
+
+## Attachment storage
+
+Before enabling internal club uploads, configure the private bucket and server-only API/worker credentials in the [attachment runbook](attachments.md). Migration 006 adds metadata, not provider buckets. The worker must be running for validation and cleanup. Real signed-transfer verification and an independent object backup/restore rehearsal are required before club file rollout; database backups do not include file bytes.

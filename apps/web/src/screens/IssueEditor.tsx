@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Issue, Label, RosterMember, UpdateIssue } from "@lira/contracts";
 import type { Backend } from "../client";
 import { Dialog, Notice } from "../components/primitives";
+import { Attachments } from "./Attachments";
 import { Comments } from "./Comments";
 import { message, text } from "../form";
 export function IssueEditor({
@@ -19,7 +20,9 @@ export function IssueEditor({
   onClose: () => void;
 }) {
   const cache = useQueryClient();
-  const [tab, setTab] = useState<"details" | "discussion">("details");
+  const [tab, setTab] = useState<"details" | "discussion" | "attachments">(
+    "details",
+  );
   const [version, setVersion] = useState(issue.version);
   const [labelName, setLabelName] = useState("");
   const members = useQuery({
@@ -117,6 +120,13 @@ export function IssueEditor({
           onClick={() => setTab("discussion")}
         >
           Discussion
+        </button>
+        <button
+          type="button"
+          aria-pressed={tab === "attachments"}
+          onClick={() => setTab("attachments")}
+        >
+          Attachments
         </button>
       </div>
       <div hidden={tab !== "details"}>
@@ -322,6 +332,16 @@ export function IssueEditor({
           issueId={issue.id}
           projectId={issue.project_id}
           archived={archived}
+        />
+      </div>
+      <div hidden={tab !== "attachments"}>
+        <Attachments
+          backend={backend}
+          orgId={orgId}
+          issueId={issue.id}
+          projectId={issue.project_id}
+          archived={archived}
+          active={tab === "attachments"}
         />
       </div>
     </Dialog>

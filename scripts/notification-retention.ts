@@ -8,7 +8,7 @@ export async function cleanupNotifications(
     ["notifications", "created_at<now()-interval '90 days'"],
     [
       "outbox_jobs",
-      "(state='completed' AND completed_at<now()-interval '7 days') OR (state='failed' AND created_at<now()-interval '30 days')",
+      "(state='completed' AND completed_at<now()-interval '7 days') OR (state='failed' AND type NOT LIKE 'attachment.%' AND created_at<now()-interval '30 days')",
     ],
     ["email_reservations", "day<CURRENT_DATE-30"],
   ] as const;
