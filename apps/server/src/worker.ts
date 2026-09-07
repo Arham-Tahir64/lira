@@ -2,6 +2,8 @@ import type pg from "pg";
 import { DeliveryError, type SendEmail, type EmailRequest } from "./email.js";
 import { processAttachment } from "./attachment-worker.js";
 import type { AttachmentOptions } from "./storage.js";
+import { processExport } from "./export-worker.js";
+import type { ExportStorage } from "./export-storage.js";
 export interface ClaimedJob {
   id: string;
   org_id: string;
@@ -44,10 +46,13 @@ async function scoped<T>(
   pool: pg.Pool,
   job: ClaimedJob,
   fn: (tx: pg.PoolClient) => Promise<T>,
+  repeatable = false,
 ) {
   const tx = await pool.connect();
   try {
-    await tx.query("BEGIN");
+    await tx.query(
+      repeatable ? "BEGIN ISOLATION LEVEL REPEATABLE READ" : "BEGIN",
+    );
     await tx.query(
       "SELECT set_config('app.org_id',$1,true),set_config('statement_timeout','5000',true),set_config('lock_timeout','3000',true)",
       [job.org_id],
@@ -77,6 +82,7 @@ interface Delivery {
   request: EmailRequest;
 }
 export interface WorkerOptions {
+  exportStorage?: ExportStorage;
   attachments?: AttachmentOptions;
   sendEmail?: SendEmail;
   emailFrom?: string;
@@ -101,6 +107,16 @@ export async function processJob(
           )
         ).rows[0]?.type as string | undefined,
     );
+    if (kind?.startsWith("export.")) {
+      await processExport(
+        job.org_id,
+        job.id,
+        (fn) => scoped(pool, job, fn),
+        (fn) => scoped(pool, job, fn, true),
+        options.exportStorage,
+      );
+      return await finishJob(pool, job);
+    }
     if (kind?.startsWith("attachment.")) {
       await processAttachment(
         job.org_id,

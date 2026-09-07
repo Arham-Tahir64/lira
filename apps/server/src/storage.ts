@@ -66,7 +66,11 @@ export function supabaseStorage(
   credential: string,
   bucket: string,
   request = fetch,
-): ObjectStorage & { verifyBucket(): Promise<void> } {
+  kind: "attachments" | "exports" = "attachments",
+): ObjectStorage & {
+  verifyBucket(): Promise<void>;
+  writeJson(key: string, value: unknown): Promise<void>;
+} {
   const url = new URL(origin);
   if (
     (url.protocol !== "https:" &&
@@ -80,6 +84,8 @@ export function supabaseStorage(
     throw new Error("Invalid storage origin");
   if (!/^[a-z0-9-]{1,63}$/.test(bucket) || !credential)
     throw new Error("Invalid storage configuration");
+  const fileLimit = kind === "exports" ? 5242880 : MAX_FILE_BYTES;
+  const allowedTypes = kind === "exports" ? ["application/json"] : MEDIA_TYPES;
   const base = `${url.origin}/storage/v1`;
   const path = (key: string) => {
     if (!/^[a-f0-9-]{36}\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/.test(key))
@@ -120,16 +126,47 @@ export function supabaseStorage(
         info.public !== false ||
         !Number.isInteger(info.file_size_limit) ||
         info.file_size_limit < 1 ||
-        info.file_size_limit > MAX_FILE_BYTES ||
+        info.file_size_limit > fileLimit ||
         !Array.isArray(info.allowed_mime_types) ||
         !info.allowed_mime_types.length ||
-        info.allowed_mime_types.some((t) => !MEDIA_TYPES.includes(t))
+        info.allowed_mime_types.some((t) => !allowedTypes.includes(t))
       )
         throw new Error(
-          "Storage bucket must be private with a maximum 10 MB limit and explicit allowed media types",
+          "Storage bucket must be private with the configured size limit and explicit allowed media types",
         );
     },
+    async writeJson(key, value) {
+      if (kind !== "exports") throw new Error("Export bucket required");
+      const body = JSON.stringify(value);
+      if (Buffer.byteLength(body) > fileLimit)
+        throw new Error("export_too_large");
+      const response = await request(`${base}/object/${path(key)}`, {
+        method: "POST",
+        headers: {
+          apikey: credential,
+          Authorization: `Bearer ${credential}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "max-age=0",
+        },
+        body,
+        signal: AbortSignal.timeout(15000),
+        redirect: "error",
+      });
+      if (!response.ok) {
+        const failure = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          statusCode?: string;
+        };
+        if (!(
+          [400, 409].includes(response.status) &&
+          (failure.error === "Duplicate" || failure.statusCode === "409")
+        ))
+          throw new Error("storage_unavailable");
+      }
+    },
     async signUpload(key) {
+      if (kind !== "attachments")
+        throw new Error("Uploads are not allowed in the export bucket");
       const data = (await (
         await call(`/object/upload/sign/${path(key)}`, "POST", {})
       ).json()) as { url: string };
@@ -154,7 +191,7 @@ export function supabaseStorage(
           const { done, value } = await reader.read();
           if (done) break;
           length += value.length;
-          if (length > MAX_FILE_BYTES) {
+          if (length > fileLimit) {
             await reader.cancel();
             throw new Error("oversized_object");
           }

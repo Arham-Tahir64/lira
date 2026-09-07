@@ -65,7 +65,7 @@ The user prioritized core Jira-style task functionality over the next infrastruc
 - Migration 005 adds forced-RLS comments with composite tenant/project/issue and author constraints. Deletion immediately scrubs the body and leaves a tombstone; activity records identifiers, never comment bodies. Backups remain subject to their retention period. Comment mentions and notifications are not implemented.
 - Verification: 54 backend/database tests and two desktop browser scenarios cover creation, drag movement, backlog planning, comment lifecycle, Markdown safety, authorization, isolation, concurrent retries, and stale writes. Type checking, lint, formatting and production build pass. React Doctor reports maintainability/iteration advisories; the browser Supabase client is identity-only with public configuration. The approximately 609 kB uncompressed main bundle has a build size warning; route-level splitting remains a future optimization.
 
-## Current increment: task attachments
+## Completed increment: task attachments
 
 - Desktop Attachments tab supports direct upload, validation status, fresh-authorized download and confirmed removal. Supports PDF, PNG, JPEG and UTF-8 text; no inline previews.
 - Private Supabase Storage adapter verifies bucket restrictions at startup. Uploads require an explicit internal-pilot organization allowlist in both API and worker configuration. External uploads remain disabled pending malware scanning.
@@ -74,13 +74,21 @@ The user prioritized core Jira-style task functionality over the next infrastruc
 - Signed downloads last 60 seconds. Physical deletion waits until upload capabilities have expired; metadata and reserved quota remain until successful cleanup. Archive/read-only and uploader/admin permissions follow existing project policy.
 - See [configuration, lifecycle, backup and provider release gates](attachments.md). Live bucket provisioning, independent backup copy/restore rehearsal and external malware scanning are not completed by fixture tests.
 
+## Current increment: overview, club templates, and organization export
+
+- Desktop Workspace overview presents personal open tasks, overdue work, status counts and project completion; task links open the editor and project links open the board. Dates use workspace timezone; archived projects are excluded. Attention lists use 20-item cursor pages and polling.
+- Project creation offers two code-bundled templates with preview: seven event tasks or six semester onboarding/handoff tasks. Term labels are optional. Project/board/tasks and retry records are atomic; blank projects remain supported. No automatic assignment, scheduling or archiving is introduced.
+- Administrator-requested exports use the durable worker and a separate private JSON bucket. A repeatable-read transaction captures structured collaboration data and an attachment manifest, including archived work; file bytes and authentication/private notification data are excluded.
+- Fresh administrator authorization protects downloads. Immutable retries, 24-hour expiry, delayed cleanup, 5 MB/row/time bounds, request quotas and a retained-object cap control costs. Oversized exports fail explicitly for maintainer assistance rather than truncate data.
+- Migration 007 adds project term/template metadata, dashboard index, export request metadata and tenant-scoped worker read grants. See [usage, configuration, semantics and release gates](overview-and-exports.md).
+
 ## Phase 2 next work, in dependency order
 
 1. Validate the new membership flows against the real staging Supabase project, including password reauthentication and invitation onboarding.
 2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search and label rename/removal remain pending; project-scoped search and desktop drag/keyboard ordering are implemented.
 3. Deploy and verify the worker/inbox with the real staging provider, then implement encrypted short-lived invitation email delivery. Assignment mail adapter and durable job processing are implemented; automatic invitation mail remains pending.
 4. Verify the attachment provider flow in staging and complete independent object backup and restore rehearsal. Metadata, quotas, transfer UI and worker validation/cleanup are implemented.
-5. Basic dashboard, two bundled student-club templates, organization export.
+5. Validate overview, templates and exports with club members; configure the private export bucket and verify real-provider expiry/cleanup. The features are implemented; hosted verification remains pending.
 6. Recovery rehearsal, accessibility review, threat-model tests, and a small internal pilot before 50-member rollout.
 
 ## Deliberately not implemented

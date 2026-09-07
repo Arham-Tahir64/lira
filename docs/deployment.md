@@ -53,3 +53,7 @@ Hosted worker/email configuration, invitation email, upload processing, automate
 ## Attachment storage
 
 Before enabling internal club uploads, configure the private bucket and server-only API/worker credentials in the [attachment runbook](attachments.md). Migration 006 adds metadata, not provider buckets. The worker must be running for validation and cleanup. Real signed-transfer verification and an independent object backup/restore rehearsal are required before club file rollout; database backups do not include file bytes.
+
+## Workspace exports
+
+Migration 007 adds overview/template metadata and export jobs. Set `EXPORT_BUCKET` to a separate private JSON-only bucket in both API and worker services, using the existing server storage credential. See [export setup and retention](overview-and-exports.md). Leave it unset to run dashboard/templates without export storage. Verify real-provider transfers and cleanup before enabling exports for club data.

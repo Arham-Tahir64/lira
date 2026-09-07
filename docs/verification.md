@@ -53,3 +53,13 @@ The task-board/comment increment passed 54 backend tests and two desktop browser
 The desktop workspace scenario now exercises file selection, SHA-256 reservation, direct transfer without an application bearer token, quarantine UI, ready download and removal. Attachment layout was visually reviewed at desktop size. Type checking, lint, formatting and build are release checks. React Doctor's array-index notice finding was corrected with stable error rendering; bounded list iteration and existing component-complexity warnings remain advisories. The browser Supabase client still handles identity only; domain metadata goes through Fastify and file bytes through scoped storage capabilities. The main bundle remains above Vite's advisory 500 kB threshold.
 
 Live provider restrictions, capability expiry, overwrite behavior, download disposition and independent object restore remain explicit staging gates in the attachment runbook. Malware scanning is not present; outside-club uploads are disabled.
+
+## Overview, templates, and export increment
+
+The suite now contains 71 backend/database tests and three desktop browser journeys. Added coverage exercises template creation and concurrent idempotent retries, dashboard counts/assignment pagination/archive exclusion, tenant export isolation, archived-data inclusion, scrubbed comments, immutable retry after provider acknowledgment failure, changed requester access, expired downloads, cleanup retention, oversized export failure and request/retained-object quotas. Export and attachment provider operations remain fixtures.
+
+The new desktop journey opens the overview, edits an assigned task, previews the actual bundled template catalog, creates a semester project and requests/downloads a JSON export. Desktop overview and project creation screenshots were visually reviewed. Type checking, lint, formatting, production build and React Doctor are run for this increment.
+
+React Doctor's eager UUID ref initializers were replaced with lazy state. Its mutation-without-invalidation finding refers to the task-opening GET request, which does not write server data; actual editor writes invalidate task data and closing refreshes the overview. No suppression was added. Remaining bounded-iteration, existing component complexity and public identity SDK artifact findings are advisories. The main browser bundle remains above Vite's advisory size threshold; route splitting remains future work.
+
+Staging still must prove provider configuration, artifact immutability and expiry, independent backups/restore, and real authentication. Successful CI does not imply production deployment or completion of those release gates.

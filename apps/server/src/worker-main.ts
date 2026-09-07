@@ -3,6 +3,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { assertWorkerRole, claimJob, processJob } from "./worker.js";
 import { resendAdapter } from "./email.js";
 import { storageFromEnvironment } from "./storage.js";
+import { exportStorageFromEnvironment } from "./export-storage.js";
+const exportStorage = await exportStorageFromEnvironment();
 const attachments = await storageFromEnvironment();
 const connectionString = process.env.WORKER_DATABASE_URL;
 if (!connectionString) throw new Error("WORKER_DATABASE_URL is required.");
@@ -65,6 +67,7 @@ try {
       const completed = await processJob(pool, job, {
         appUrl,
         attachments,
+        exportStorage,
         emailDailyLimit,
         suppressEmail: !emailEnabled,
         emailFrom: emailEnabled ? process.env.EMAIL_FROM : undefined,

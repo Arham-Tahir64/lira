@@ -24,12 +24,17 @@ import { createIssue, listIssues, updateIssue } from "./work.js";
 import { organizationRoutes } from "./organization-routes.js";
 import { commentRoutes } from "./comment-routes.js";
 import { notificationRoutes } from "./notification-routes.js";
+import { createProject } from "./templates.js";
+import { dashboardRoutes } from "./dashboard-routes.js";
 import { workflowRoutes } from "./workflow-routes.js";
 import { requireAdmin } from "./policy.js";
 
 import { attachmentRoutes } from "./attachment-routes.js";
 import type { AttachmentOptions } from "./storage.js";
+import { exportRoutes } from "./export-routes.js";
+import type { ExportStorage } from "./export-storage.js";
 export interface AppOptions {
+  exportStorage?: ExportStorage;
   attachments?: AttachmentOptions;
   pool: pg.Pool;
   assignmentEmailEnabled?: boolean;
@@ -227,6 +232,8 @@ export async function buildApp(options: AppOptions) {
       );
       await organizationRoutes(api, options.pool);
       await workflowRoutes(api, options.pool);
+      await dashboardRoutes(api, options.pool);
+      await exportRoutes(api, options.pool, options.exportStorage);
       await commentRoutes(api, options.pool);
       await attachmentRoutes(api, options.pool, options.attachments);
       await notificationRoutes(
@@ -245,7 +252,7 @@ export async function buildApp(options: AppOptions) {
             async (tx) =>
               (
                 await tx.query(
-                  "SELECT id,name,key,description,lead_membership_id,archived_at FROM app.projects WHERE org_id=$1 ORDER BY created_at,id LIMIT 100",
+                  "SELECT id,name,key,description,lead_membership_id,archived_at,term,template_id FROM app.projects WHERE org_id=$1 ORDER BY created_at,id LIMIT 100",
                   [request.params.orgId],
                 )
               ).rows,
@@ -264,21 +271,12 @@ export async function buildApp(options: AppOptions) {
             request.params.orgId,
             async (tx, member) => {
               requireAdmin(member);
-              const { rows } = await tx.query(
-                "INSERT INTO app.projects(org_id,name,key,description,lead_membership_id) VALUES($1,$2,$3,$4,$5) RETURNING id,name,key,description,lead_membership_id,archived_at",
-                [
-                  request.params.orgId,
-                  request.body.name,
-                  request.body.key,
-                  request.body.description ?? "",
-                  member.id,
-                ],
+              return createProject(
+                tx,
+                request.params.orgId,
+                member,
+                request.body,
               );
-              await tx.query(
-                "INSERT INTO app.boards(org_id,project_id) VALUES($1,$2)",
-                [request.params.orgId, rows[0].id],
-              );
-              return rows[0];
             },
           );
           return reply.code(201).send(project);

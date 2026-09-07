@@ -26,6 +26,11 @@ export const OrgInput = object({
   }),
 });
 export const ProjectInput = object({
+  clientKey: Type.Optional(Uuid),
+  templateId: Type.Optional(
+    Type.Union([Type.Literal("event"), Type.Literal("semester")]),
+  ),
+  term: Type.Optional(Type.String({ maxLength: 60 })),
   name: Type.String({ minLength: 1, maxLength: 100, pattern: "\\S" }),
   key: Type.String({ pattern: "^[A-Z][A-Z0-9]{1,9}$" }),
   description: Type.Optional(Type.String({ maxLength: 5000 })),
@@ -83,6 +88,8 @@ export interface Organization {
   role: "owner" | "admin" | "member";
 }
 export interface Project {
+  term?: string;
+  template_id?: string | null;
   id: string;
   name: string;
   key: string;
@@ -266,4 +273,52 @@ export interface AttachmentList {
   usedBytes: number;
   quotaBytes: number;
   maxFileBytes: number;
+}
+
+export interface Dashboard {
+  today: string;
+  counts: {
+    todo: number;
+    in_progress: number;
+    done: number;
+    overdue: number;
+    assigned: number;
+    backlog: number;
+  };
+  projects: Array<{
+    id: string;
+    name: string;
+    key: string;
+    term: string;
+    total: number;
+    done: number;
+    overdue: number;
+  }>;
+}
+export interface DashboardTask {
+  id: string;
+  project_id: string;
+  number: number;
+  title: string;
+  status: IssueStatus;
+  priority: string;
+  planning_state: string;
+  due_date: string | null;
+  project_key: string;
+  project_name: string;
+}
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  tasks: Array<{ title: string; description: string }>;
+}
+export interface ExportRecord {
+  id: string;
+  state: "pending" | "ready" | "failed" | "expired";
+  created_at: string;
+  expires_at: string;
+  snapshot_at: string | null;
+  bytes: number | null;
+  failure: string | null;
 }

@@ -120,6 +120,7 @@ export function ProjectView({
         <div>
           <div className="eyebrow">{project.key} · PROJECT</div>
           <h1>{project.name}</h1>
+          {project.term && <p className="hint">{project.term}</p>}
           <p>{project.description || "A shared place for the work ahead."}</p>
         </div>
         <button

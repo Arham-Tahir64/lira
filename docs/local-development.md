@@ -46,3 +46,7 @@ The test suite calls native binaries directly because the embedded wrapper's pro
 Add a new numbered migration; never modify an applied migration. The runner records checksums and holds an advisory lock. The first migration is intentionally not idempotent outside the runner: role/table conflicts should fail rather than silently adopt unknown existing permissions. Test migrations on a fresh database and a previous schema snapshot.
 
 Supabase platform roles and production network settings can differ from local superuser setup. Confirm the first migration and role provisioning in an empty staging project before touching production. Exclude the `app` schema from the Supabase Data API and do not grant browser roles any access to it.
+
+## Overview and templates
+
+After applying migration 007, select **Workspace overview** in the sidebar. **Create project** offers two bundled templates and an optional semester label. These use the existing database/API configuration. Background exports additionally need the private JSON bucket and worker configuration in [overview and exports](overview-and-exports.md).

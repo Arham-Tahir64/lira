@@ -9,12 +9,13 @@ import {
   Plus,
   Users,
 } from "lucide-react";
-import type { Organization, Project } from "@lira/contracts";
+import type { Organization, Project, ProjectTemplate } from "@lira/contracts";
 import type { Backend } from "../client";
 import { Brand, Notice, Dialog } from "../components/primitives";
 import { text, message } from "../form";
 import { ProjectView } from "./Project";
 import { Notifications } from "./Notifications";
+import { Overview } from "./Overview";
 import { People } from "./People";
 export function Workspace({
   backend,
@@ -28,7 +29,7 @@ export function Workspace({
   const cache = useQueryClient();
   const [orgId, setOrgId] = useState(initialOrgId ?? "");
   const [section, setSection] = useState<
-    "projects" | "people" | "notifications"
+    "projects" | "people" | "notifications" | "overview"
   >("projects");
   const [projectId, setProjectId] = useState("");
   const [dialog, setDialog] = useState<"org" | "project" | null>(null);
@@ -103,6 +104,15 @@ export function Workspace({
             Notifications
           </button>
         )}
+        {org && (
+          <button
+            className={`project-nav ${section === "overview" ? "active" : ""}`}
+            onClick={() => setSection("overview")}
+          >
+            <LayoutGrid size={16} />
+            Workspace overview
+          </button>
+        )}
         <div className="nav-heading">
           <span>Projects</span>
           {canManage && (
@@ -152,18 +162,31 @@ export function Workspace({
           <span>{org?.name ?? "Get started"}</span>
           <span className="separator">/</span>
           <strong>
-            {section === "people"
-              ? "People & teams"
-              : section === "notifications"
-                ? "Notifications"
-                : (project?.name ?? "Projects")}
+            {section === "overview"
+              ? "Workspace overview"
+              : section === "people"
+                ? "People & teams"
+                : section === "notifications"
+                  ? "Notifications"
+                  : (project?.name ?? "Projects")}
           </strong>
           <span className="topbar-note">A shared space to get things done</span>
         </header>
         {signoutError && <Notice>{signoutError}</Notice>}
         {orgs.error && <Notice>{message(orgs.error)}</Notice>}
         {projects.error && <Notice>{message(projects.error)}</Notice>}
-        {org && section === "notifications" ? (
+        {org && section === "overview" ? (
+          <Overview
+            key={org.id}
+            backend={backend}
+            orgId={org.id}
+            canManage={!!canManage}
+            onProject={(id) => {
+              setProjectId(id);
+              setSection("projects");
+            }}
+          />
+        ) : org && section === "notifications" ? (
           <Notifications
             key={org.id}
             backend={backend}
@@ -260,6 +283,14 @@ function CreateContainer({
   onCreated: (id: string) => void;
 }) {
   const cache = useQueryClient();
+  const [clientKey] = useState(() => crypto.randomUUID());
+  const [templateId, setTemplateId] = useState("");
+  const templates = useQuery({
+    queryKey: ["templates", orgId],
+    enabled: kind === "project" && !!orgId,
+    queryFn: () => backend.api<ProjectTemplate[]>(`/orgs/${orgId}/templates`),
+  });
+  const template = templates.data?.find((t) => t.id === templateId);
   const mutation = useMutation({
     mutationFn: (body: Record<string, string>) =>
       backend.api<{ id: string }>(
@@ -283,11 +314,15 @@ function CreateContainer({
             name: text(form, "name"),
             key: text(form, "key").toUpperCase(),
             description: text(form, "description"),
+            term: text(form, "term"),
+            clientKey,
+            ...(templateId ? { templateId } : {}),
           },
     );
   }
   return (
     <Dialog
+      className={kind === "project" ? "project-create" : undefined}
       title={kind === "org" ? "Create workspace" : "Create project"}
       onClose={onClose}
     >
@@ -331,6 +366,47 @@ function CreateContainer({
               Description
               <textarea name="description" maxLength={5000} rows={3} />
             </label>
+            <label>
+              Semester or term
+              <input
+                name="term"
+                maxLength={60}
+                placeholder="Fall 2026 (optional)"
+              />
+            </label>
+            <label>
+              Start from
+              <select
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+              >
+                <option value="">Blank project</option>
+                {templates.data?.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {templates.error && (
+              <Notice>
+                {message(templates.error)} You can still create a blank project.
+              </Notice>
+            )}
+            {template && (
+              <div className="template-preview">
+                <p>{template.description}</p>
+                <p className="hint">
+                  Creates {template.tasks.length} unassigned tasks you can edit.
+                  No automatic dates or archiving.
+                </p>
+                <ul>
+                  {template.tasks.map((task) => (
+                    <li key={task.title}>{task.title}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="hint">Visible to everyone in this workspace.</p>
           </>
         )}

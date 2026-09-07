@@ -5,6 +5,7 @@ import { supabaseVerifier } from "./identity.js";
 import { assertRuntimeRole } from "./database.js";
 import { Problem } from "./problem.js";
 import { assertPublicSupabaseKey } from "./configuration.js";
+import { exportStorageFromEnvironment } from "./export-storage.js";
 import { storageFromEnvironment } from "./storage.js";
 function required(key: string) {
   const value = process.env[key];
@@ -40,6 +41,7 @@ await assertRuntimeRole(pool);
 const app = await buildApp({
   pool,
   attachments: await storageFromEnvironment(),
+  exportStorage: await exportStorageFromEnvironment(),
   assignmentEmailEnabled: process.env.ASSIGNMENT_EMAIL_ENABLED === "true",
   supabaseUrl,
   publicKey,
