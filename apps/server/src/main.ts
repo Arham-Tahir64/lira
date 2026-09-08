@@ -7,6 +7,7 @@ import { Problem } from "./problem.js";
 import { assertPublicSupabaseKey } from "./configuration.js";
 import { exportStorageFromEnvironment } from "./export-storage.js";
 import { storageFromEnvironment } from "./storage.js";
+import { invitationMailFromEnvironment } from "./invitation-email.js";
 function required(key: string) {
   const value = process.env[key];
   if (!value)
@@ -40,6 +41,7 @@ const pool = new pg.Pool({
 await assertRuntimeRole(pool);
 const app = await buildApp({
   pool,
+  invitationMail: invitationMailFromEnvironment(),
   attachments: await storageFromEnvironment(),
   exportStorage: await exportStorageFromEnvironment(),
   assignmentEmailEnabled: process.env.ASSIGNMENT_EMAIL_ENABLED === "true",

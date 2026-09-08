@@ -74,6 +74,7 @@ test("owner creates an email-bound invitation and manages a team", async ({
         created_at: new Date().toISOString(),
         accepted_at: null,
         revoked_at: null,
+        email_status: "queued",
       };
       invitations.push(invitation);
       return route.fulfill({
@@ -122,6 +123,11 @@ test("owner creates an email-bound invitation and manages a team", async ({
   await page
     .getByRole("button", { name: "Create invitation", exact: true })
     .click();
+  await expect(
+    page.getByText(
+      "Invitation email queued. You can also copy the link below.",
+    ),
+  ).toBeVisible();
   await expect(page.getByLabel("Invitation link")).toHaveValue(
     /#invite=A{43}$/,
   );

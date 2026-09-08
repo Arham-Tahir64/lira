@@ -4,6 +4,8 @@ import { assertWorkerRole, claimJob, processJob } from "./worker.js";
 import { resendAdapter } from "./email.js";
 import { storageFromEnvironment } from "./storage.js";
 import { exportStorageFromEnvironment } from "./export-storage.js";
+import { invitationMailFromEnvironment } from "./invitation-email.js";
+const invitationMail = invitationMailFromEnvironment();
 const exportStorage = await exportStorageFromEnvironment();
 const attachments = await storageFromEnvironment();
 const connectionString = process.env.WORKER_DATABASE_URL;
@@ -27,7 +29,7 @@ if (
   throw new Error("APP_URL must be a trusted HTTPS application URL.");
 const emailEnabled = process.env.ASSIGNMENT_EMAIL_ENABLED === "true";
 if (
-  emailEnabled &&
+  (emailEnabled || invitationMail) &&
   (!process.env.RESEND_API_KEY ||
     !process.env.EMAIL_FROM ||
     !process.env.APP_URL)
@@ -55,7 +57,13 @@ for (const signal of ["SIGINT", "SIGTERM"])
   process.once(signal, () => {
     stopping = true;
   });
-console.log(JSON.stringify({ event: "worker_started", emailEnabled }));
+console.log(
+  JSON.stringify({
+    event: "worker_started",
+    emailEnabled,
+    invitationEmailEnabled: !!invitationMail,
+  }),
+);
 try {
   while (!stopping) {
     try {
@@ -66,14 +74,16 @@ try {
       }
       const completed = await processJob(pool, job, {
         appUrl,
+        invitationMail,
         attachments,
         exportStorage,
         emailDailyLimit,
         suppressEmail: !emailEnabled,
         emailFrom: emailEnabled ? process.env.EMAIL_FROM : undefined,
-        sendEmail: emailEnabled
-          ? resendAdapter(process.env.RESEND_API_KEY!)
-          : undefined,
+        sendEmail:
+          emailEnabled || invitationMail
+            ? resendAdapter(process.env.RESEND_API_KEY!)
+            : undefined,
       });
       console.log(
         JSON.stringify({

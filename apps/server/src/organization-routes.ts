@@ -26,7 +26,12 @@ import {
   transferOwnership,
   removeMember,
 } from "./organization.js";
-export async function organizationRoutes(api: FastifyInstance, pool: pg.Pool) {
+import type { InvitationMailConfig } from "./invitation-email.js";
+export async function organizationRoutes(
+  api: FastifyInstance,
+  pool: pg.Pool,
+  mail?: InvitationMailConfig,
+) {
   const security = [{ bearerAuth: [] }];
   api.get<{ Params: Static<typeof OrgParams> }>(
     "/orgs/:orgId/members",
@@ -131,7 +136,7 @@ export async function organizationRoutes(api: FastifyInstance, pool: pg.Pool) {
           requireAdmin(member);
           return (
             await tx.query(
-              "SELECT id,email,role,expires_at,accepted_at,revoked_at,created_at FROM app.invitations WHERE org_id=$1 ORDER BY created_at DESC,id LIMIT 100",
+              "SELECT i.id,i.email,i.role,i.expires_at,i.accepted_at,i.revoked_at,i.created_at,CASE WHEN e.state='queued' AND (i.revoked_at IS NOT NULL OR i.accepted_at IS NOT NULL) THEN 'cancelled' WHEN e.state='queued' AND e.expires_at<=now() THEN 'expired' WHEN e.state='queued' AND j.state='failed' THEN 'failed' ELSE COALESCE(e.state,'manual') END AS email_status FROM app.invitations i LEFT JOIN app.invitation_emails e ON e.org_id=i.org_id AND e.invitation_id=i.id LEFT JOIN app.outbox_jobs j ON j.org_id=e.org_id AND j.event_id=e.event_id WHERE i.org_id=$1 ORDER BY i.created_at DESC,i.id LIMIT 100",
               [request.params.orgId],
             )
           ).rows;
@@ -162,6 +167,7 @@ export async function organizationRoutes(api: FastifyInstance, pool: pg.Pool) {
                 member,
                 request.body.email,
                 request.body.role,
+                mail,
               ),
             "exclusive",
           ),
@@ -210,6 +216,10 @@ export async function organizationRoutes(api: FastifyInstance, pool: pg.Pool) {
             [id, request.identity.id],
           )
         ).rows[0];
+        await tx.query(
+          "UPDATE app.invitation_emails SET state='cancelled',encrypted_payload=NULL WHERE org_id=$1 AND invitation_id IN (SELECT id FROM app.invitations WHERE org_id=$1 AND token_hash=$2) AND state='queued'",
+          [id, hashInvite(request.body.token)],
+        );
         await organizationEvent(tx, id, member.id, "invitation.accepted", {});
         return id;
       });

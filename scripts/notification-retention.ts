@@ -8,7 +8,7 @@ export async function cleanupNotifications(
     ["notifications", "created_at<now()-interval '90 days'"],
     [
       "outbox_jobs",
-      "(state='completed' AND completed_at<now()-interval '7 days') OR (state='failed' AND type NOT LIKE 'attachment.%' AND type NOT LIKE 'export.%' AND created_at<now()-interval '30 days')",
+      "(state='completed' AND completed_at<now()-interval '7 days') OR (state='failed' AND type NOT LIKE 'attachment.%' AND type NOT LIKE 'export.%' AND type NOT LIKE 'invitation.%' AND created_at<now()-interval '30 days')",
     ],
     ["email_reservations", "day<CURRENT_DATE-30"],
   ] as const;
@@ -27,5 +27,18 @@ export async function cleanupNotifications(
         ).rows[0].count;
     report.push({ table, count });
   }
+  const expired = "encrypted_payload IS NOT NULL AND expires_at<=now()";
+  const scrubbed = apply
+    ? ((
+        await client.query(
+          `UPDATE app.invitation_emails SET encrypted_payload=NULL,state=CASE WHEN state='queued' THEN 'expired' ELSE state END WHERE ctid IN (SELECT ctid FROM app.invitation_emails WHERE ${expired} LIMIT 500)`,
+        )
+      ).rowCount ?? 0)
+    : (
+        await client.query(
+          `SELECT count(*)::int AS count FROM app.invitation_emails WHERE ${expired}`,
+        )
+      ).rows[0].count;
+  report.push({ table: "invitation_email_payloads", count: scrubbed });
   return report;
 }

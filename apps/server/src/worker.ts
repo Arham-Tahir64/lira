@@ -1,3 +1,5 @@
+import { processInvitationEmail } from "./invitation-email-worker.js";
+import type { InvitationMailConfig } from "./invitation-email.js";
 import type pg from "pg";
 import { DeliveryError, type SendEmail, type EmailRequest } from "./email.js";
 import { processAttachment } from "./attachment-worker.js";
@@ -82,6 +84,7 @@ interface Delivery {
   request: EmailRequest;
 }
 export interface WorkerOptions {
+  invitationMail?: InvitationMailConfig;
   exportStorage?: ExportStorage;
   attachments?: AttachmentOptions;
   sendEmail?: SendEmail;
@@ -107,6 +110,24 @@ export async function processJob(
           )
         ).rows[0]?.type as string | undefined,
     );
+    if (kind?.startsWith("invitation.")) {
+      await processInvitationEmail(
+        job.org_id,
+        job.id,
+        (fn) => scoped(pool, job, fn),
+        async () =>
+          (
+            await pool.query("SELECT app.reserve_email($1,$2,$3) AS reserved", [
+              job.id,
+              job.lease_token,
+              options.emailDailyLimit ?? 100,
+            ])
+          ).rows[0].reserved,
+        options.invitationMail,
+        options.sendEmail,
+      );
+      return await finishJob(pool, job);
+    }
     if (kind?.startsWith("export.")) {
       await processExport(
         job.org_id,

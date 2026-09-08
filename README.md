@@ -2,7 +2,7 @@
 
 A lightweight, multi-tenant project workspace for student clubs. Built against the accepted [software architecture](docs/software-architecture.md).
 
-**Status: foundation, membership/teams, project workflows, task-board collaboration, attachments, overview/templates/export, and worker/inbox implemented; staging validation pending.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
+**Status: foundation, membership/teams, project workflows, task-board collaboration, attachments, overview/templates/export, invitation email, and worker/inbox implemented; staging validation pending.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
 
 **Product priority: laptop/desktop first.** New interface work and release verification target desktop browsers. Mobile-specific design and verification are deferred unless demand warrants them.
 
@@ -66,4 +66,4 @@ The browser calls Supabase for identity only and uses the API for all domain dat
 
 ## Production configuration
 
-See [deployment](docs/deployment.md). No services are provisioned or published automatically. Container startup requires real configuration and rejects an owner/superuser database connection. The worker now consumes issue outbox events for in-app assignment notifications. Optional assignment email is disabled by default. See [worker setup and delivery limits](docs/notifications-and-worker.md); invitation email remains pending.
+See [deployment](docs/deployment.md). No services are provisioned or published automatically. Container startup requires real configuration and rejects an owner/superuser database connection. The worker now consumes issue outbox events for in-app assignment notifications. Optional assignment email is disabled by default. See [worker setup and delivery limits](docs/notifications-and-worker.md); see [opt-in invitation email configuration](docs/invitation-email.md).

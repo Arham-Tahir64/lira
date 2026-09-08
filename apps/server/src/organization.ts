@@ -8,6 +8,10 @@ import {
   requireOwner,
   requireRecentAuthentication,
 } from "./policy.js";
+import {
+  queueInvitationEmail,
+  type InvitationMailConfig,
+} from "./invitation-email.js";
 export function hashInvite(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -29,6 +33,7 @@ export async function createInvitation(
   member: Membership,
   email: string,
   role: "admin" | "member",
+  mail?: InvitationMailConfig,
 ) {
   requireAdmin(member);
   if (role === "admin") requireOwner(member);
@@ -62,8 +67,17 @@ export async function createInvitation(
     invitationId: result.rows[0].id,
     role,
   });
-  // Only the administrator receives this one-time response. Neither logs, events nor SQL store the raw token.
-  return { ...result.rows[0], token };
+  if (mail)
+    await queueInvitationEmail(
+      tx,
+      orgId,
+      member.id,
+      result.rows[0],
+      token,
+      mail,
+    );
+  // Only the administrator receives the raw token; pending email content is encrypted with a short TTL.
+  return { ...result.rows[0], token, email_status: mail ? "queued" : "manual" };
 }
 export async function revokeInvitation(
   tx: Transaction,
@@ -82,6 +96,10 @@ export async function revokeInvitation(
   if (invite.role === "admin") requireOwner(member);
   await tx.query(
     "UPDATE app.invitations SET revoked_at=coalesce(revoked_at,now()) WHERE org_id=$1 AND id=$2",
+    [orgId, id],
+  );
+  await tx.query(
+    "UPDATE app.invitation_emails SET state='cancelled',encrypted_payload=NULL WHERE org_id=$1 AND invitation_id=$2 AND state='queued'",
     [orgId, id],
   );
   await organizationEvent(tx, orgId, member.id, "invitation.revoked", {

@@ -28,13 +28,13 @@ Implemented and covered by checks:
 
 ## Completed increment: Phase 2 membership and teams
 
-- Email-bound, single-use, seven-day invitation links; only token hashes are stored. Creation/revocation requires an administrator, and Admin invitations require an Owner.
+- Email-bound, single-use, seven-day invitation links; token hashes are stored for acceptance; optional delivery now uses the short-lived encrypted intent described below. Creation/revocation requires an administrator, and Admin invitations require an Owner.
 - Invitation acceptance checks current inviter permissions, expiry/revocation, the verified recipient email, and the 100-active-member pilot cap atomically.
 - A People & Teams screen supports invitation creation, role changes, member removal/leave, ownership transfer, and team membership.
 - Ownership/role changes require a recent signed provider authentication method timestamp; token refresh does not qualify. The UI asks for the current password through Supabase before sensitive changes.
 - Membership writes serialize with normal tenant requests. Removal clears open assignments, increments issue versions, removes team links, revokes outstanding invites created by the departing member, and reassigns project leads to an active owner. Historical attribution remains.
 - A deferred PostgreSQL trigger prevents removal/demotion of the final owner even through direct SQL. Teams are organizational groups and grant no project permissions.
-- Invitations currently provide a one-time link for the administrator to share. No automatic email is sent; email delivery is pending the planned worker step. Organization activity is persisted; notification delivery is not implied.
+- Invitations provide a one-time link for the administrator to share. Optional automatic email is implemented in the invitation-email increment below. Organization activity does not imply inbox delivery.
 
 ## Completed increment: Phase 2 project workflows
 
@@ -74,7 +74,7 @@ The user prioritized core Jira-style task functionality over the next infrastruc
 - Signed downloads last 60 seconds. Physical deletion waits until upload capabilities have expired; metadata and reserved quota remain until successful cleanup. Archive/read-only and uploader/admin permissions follow existing project policy.
 - See [configuration, lifecycle, backup and provider release gates](attachments.md). Live bucket provisioning, independent backup copy/restore rehearsal and external malware scanning are not completed by fixture tests.
 
-## Current increment: overview, club templates, and organization export
+## Completed increment: overview, club templates, and organization export
 
 - Desktop Workspace overview presents personal open tasks, overdue work, status counts and project completion; task links open the editor and project links open the board. Dates use workspace timezone; archived projects are excluded. Attention lists use 20-item cursor pages and polling.
 - Project creation offers two code-bundled templates with preview: seven event tasks or six semester onboarding/handoff tasks. Term labels are optional. Project/board/tasks and retry records are atomic; blank projects remain supported. No automatic assignment, scheduling or archiving is introduced.
@@ -82,11 +82,20 @@ The user prioritized core Jira-style task functionality over the next infrastruc
 - Fresh administrator authorization protects downloads. Immutable retries, 24-hour expiry, delayed cleanup, 5 MB/row/time bounds, request quotas and a retained-object cap control costs. Oversized exports fail explicitly for maintainer assistance rather than truncate data.
 - Migration 007 adds project term/template metadata, dashboard index, export request metadata and tenant-scoped worker read grants. See [usage, configuration, semantics and release gates](overview-and-exports.md).
 
+## Current increment: automatic invitation email
+
+- Optional transactional invitation email uses the existing PostgreSQL outbox and worker, with no new infrastructure. Manual links remain supported when disabled.
+- Migration 008 adds tenant-scoped encrypted email intents. AES-256-GCM binds immutable message content to organization/invitation; API credentials cannot read ciphertext. Delivery rechecks invitation and inviter authorization.
+- Stable provider idempotency keys, shared email budgets, bounded retries, 20-hour expiry jobs and maintenance cleanup protect against replay and retained raw links. Acceptance/revocation clears queued content.
+- Desktop People shows queued/provider-accepted/failure status and retains the one-time copy link. Provider acceptance is not confirmation of inbox delivery.
+- Verification: 85 backend tests and three desktop journeys pass, along with type checking, lint, formatting and production build. React Doctor reports the same existing advisories; the People screen was visually checked.
+- See [configuration and staging release gates](invitation-email.md). Live provider sending remains unverified.
+
 ## Phase 2 next work, in dependency order
 
 1. Validate the new membership flows against the real staging Supabase project, including password reauthentication and invitation onboarding.
 2. Validate desktop project workflows with club members, including terminology and search behavior. Organization-wide search and label rename/removal remain pending; project-scoped search and desktop drag/keyboard ordering are implemented.
-3. Deploy and verify the worker/inbox with the real staging provider, then implement encrypted short-lived invitation email delivery. Assignment mail adapter and durable job processing are implemented; automatic invitation mail remains pending.
+3. Deploy and verify the worker/inbox and opt-in invitation email with authorized staging recipients. Assignment and invitation mail adapters and durable processing are implemented; actual provider delivery remains unverified.
 4. Verify the attachment provider flow in staging and complete independent object backup and restore rehearsal. Metadata, quotas, transfer UI and worker validation/cleanup are implemented.
 5. Validate overview, templates and exports with club members; configure the private export bucket and verify real-provider expiry/cleanup. The features are implemented; hosted verification remains pending.
 6. Recovery rehearsal, accessibility review, threat-model tests, and a small internal pilot before 50-member rollout.

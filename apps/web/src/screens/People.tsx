@@ -36,6 +36,7 @@ export function People({
     queryKey: ["invitations", org.id],
     queryFn: () => backend.api<Invitation[]>(`/orgs/${org.id}/invitations`),
     enabled: canManage,
+    refetchInterval: 15_000,
   });
   const revoke = useMutation({
     mutationFn: (id: string) =>
@@ -114,8 +115,8 @@ export function People({
         <section className="people-section">
           <h2>Invitations</h2>
           <p className="hint">
-            Share invitation links with the intended recipient. Links expire
-            after seven days.
+            Links expire after seven days. If email fails or expires, share your
+            saved link or revoke the invitation and create a new one.
           </p>
           {invites.error && <Notice>{message(invites.error)}</Notice>}
           {revoke.error && <Notice>{message(revoke.error)}</Notice>}
@@ -132,6 +133,16 @@ export function People({
                     : new Date(invitation.expires_at) < new Date()
                       ? "Expired"
                       : "Pending"}
+              </small>
+              <small>
+                {invitation.email_status === "sent"
+                  ? "Email accepted by provider"
+                  : invitation.email_status === "queued"
+                    ? "Email queued"
+                    : invitation.email_status &&
+                        invitation.email_status !== "manual"
+                      ? `Email ${invitation.email_status}`
+                      : "Share link manually"}
               </small>
               {!invitation.accepted_at &&
                 !invitation.revoked_at &&
@@ -179,10 +190,14 @@ function InviteMember({
   const [copied, setCopied] = useState(false);
   const create = useMutation({
     mutationFn: (body: { email: string; role: string }) =>
-      backend.api<{ token: string; email: string }>(
-        `/orgs/${org.id}/invitations`,
-        { method: "POST", body: JSON.stringify(body) },
-      ),
+      backend.api<{
+        token: string;
+        email: string;
+        email_status?: Invitation["email_status"];
+      }>(`/orgs/${org.id}/invitations`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     onSuccess: () =>
       cache.invalidateQueries({ queryKey: ["invitations", org.id] }),
   });
@@ -208,6 +223,11 @@ function InviteMember({
     <Dialog title="Invite member" onClose={onClose}>
       {create.data ? (
         <div className="invite-result">
+          {create.data.email_status === "queued" && (
+            <p role="status">
+              Invitation email queued. You can also copy the link below.
+            </p>
+          )}
           <p>
             Share this link with <strong>{create.data.email}</strong>. Only that
             verified email can accept it.

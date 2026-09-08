@@ -36,4 +36,4 @@ An operator should inspect a failed job, correct the cause, and use a one-off da
 
 ## Remaining delivery work
 
-Invitation emails are still manual links. The raw token cannot be recovered from the stored hash. Automated invitation delivery requires a separately reviewed short-lived encrypted delivery secret, expiry/revocation checks, and verified sender/staging tests; do not store plaintext tokens in outbox payloads. Signup/recovery messages remain Supabase Auth's responsibility. Bounces/suppression feedback, unattended retention, and hosted alerting must be validated before external beta.
+Optional [invitation email](invitation-email.md) is implemented with short-lived encrypted intents, authorization rechecks and expiry cleanup. It is disabled by default; manual links remain supported. Configure a verified sender and complete authorized staging tests before enabling it for members. Raw tokens cannot be recovered through the API and are never stored in plaintext outbox payloads. Signup/recovery messages remain Supabase Auth's responsibility. Bounces/suppression feedback, unattended retention, and hosted alerting must be validated before external beta.

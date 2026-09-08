@@ -33,7 +33,9 @@ import { attachmentRoutes } from "./attachment-routes.js";
 import type { AttachmentOptions } from "./storage.js";
 import { exportRoutes } from "./export-routes.js";
 import type { ExportStorage } from "./export-storage.js";
+import type { InvitationMailConfig } from "./invitation-email.js";
 export interface AppOptions {
+  invitationMail?: InvitationMailConfig;
   exportStorage?: ExportStorage;
   attachments?: AttachmentOptions;
   pool: pg.Pool;
@@ -230,7 +232,7 @@ export async function buildApp(options: AppOptions) {
           return reply.code(201).send({ ...org, role: "owner" });
         },
       );
-      await organizationRoutes(api, options.pool);
+      await organizationRoutes(api, options.pool, options.invitationMail);
       await workflowRoutes(api, options.pool);
       await dashboardRoutes(api, options.pool);
       await exportRoutes(api, options.pool, options.exportStorage);

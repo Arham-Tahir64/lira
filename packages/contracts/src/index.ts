@@ -176,6 +176,8 @@ export const MemberResponse = object({
 });
 export type RosterMember = Static<typeof MemberResponse>;
 export interface Invitation {
+  email_status?:
+    "manual" | "queued" | "sent" | "cancelled" | "expired" | "failed";
   id: string;
   email: string;
   role: "admin" | "member";
