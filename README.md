@@ -2,7 +2,9 @@
 
 A lightweight, multi-tenant project workspace for student clubs. Built against the accepted [software architecture](docs/software-architecture.md).
 
-**Status: Phase 1 implementation in progress.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
+**Status: foundation, membership/teams, project workflows, task-board collaboration, attachments, overview/templates/export, invitation email, and worker/inbox implemented; staging validation pending.** The repository contains a working foundation and a tested task-management vertical slice. It is not ready for external club data or a paid launch. See [phase gates and next work](docs/implementation-status.md).
+
+**Product priority: laptop/desktop first.** New interface work and release verification target desktop browsers. Mobile-specific design and verification are deferred unless demand warrants them.
 
 ## Implemented
 
@@ -10,7 +12,16 @@ A lightweight, multi-tenant project workspace for student clubs. Built against t
 - Fastify REST API with shared TypeBox contracts, generated OpenAPI, strict input validation, response allowlists for tasks, role checks, and restricted public configuration.
 - PostgreSQL tenant isolation with transaction-local context, forced RLS, composite foreign keys, separate bootstrap/runtime roles, and fail-closed startup credential checks.
 - Atomic task/activity/outbox creation, concurrent issue numbering, idempotent task creation, versioned updates, and bounded task pagination.
-- Real PostgreSQL integration tests, signed-token verification tests, desktop/mobile UI tests, CI, and a production container definition.
+- Email-bound invitation links, roster and team management, recent-authentication ownership transfer, and safe member removal with database-enforced last-owner protection.
+- Real PostgreSQL integration tests, signed-token verification tests, desktop UI release checks, CI, and a production container definition. Existing mobile test configuration remains available as an optional check.
+
+- Desktop task editing/assignment, organization labels, PostgreSQL project search and filters, independently paginated board columns, drag-and-drop and keyboard ordering, per-column creation, assignee/due-date cards, reversible project archive, and paginated activity history.
+
+- Task discussions with safe Markdown, author editing, administrator removal, version conflicts, and paginated history.
+
+- Private task attachments with signed transfers, worker validation, workspace quotas, and retryable removal. Uploads require explicit internal-pilot configuration; see [storage setup and release gates](docs/attachments.md).
+
+- Workspace overview with personal/overdue tasks and project progress, two bundled club templates, and administrator-requested background JSON exports. See [usage and export setup](docs/overview-and-exports.md).
 
 ## Start locally
 
@@ -55,4 +66,4 @@ The browser calls Supabase for identity only and uses the API for all domain dat
 
 ## Production configuration
 
-See [deployment](docs/deployment.md). No services are provisioned or published automatically. Container startup requires real configuration and rejects an owner/superuser database connection. Outbox rows are durable but intentionally **not consumed yet**; notification delivery and the worker belong to Phase 2.
+See [deployment](docs/deployment.md). No services are provisioned or published automatically. Container startup requires real configuration and rejects an owner/superuser database connection. The worker now consumes issue outbox events for in-app assignment notifications. Optional assignment email is disabled by default. See [worker setup and delivery limits](docs/notifications-and-worker.md); see [opt-in invitation email configuration](docs/invitation-email.md).

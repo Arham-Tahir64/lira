@@ -4,7 +4,7 @@ No production service is created by this repository. Provision staging before in
 
 ## Planned topology
 
-Render web service serving the compiled React app and Fastify API; Supabase PostgreSQL/Auth; a separate worker from the same application codebase in Phase 2. Private storage, email notifications, and billing arrive with their scheduled features. No Redis or additional backend framework is introduced.
+Render web service serving the compiled React app and Fastify API; Supabase PostgreSQL/Auth; a separate worker from the same application codebase. In-app assignment delivery and an opt-in email adapter are implemented; see [worker deployment](notifications-and-worker.md). Private storage and billing remain pending. No Redis or additional backend framework is introduced.
 
 ## Required environment
 
@@ -36,9 +36,11 @@ The image includes the migration source and `tsx` tooling so an authorized one-o
 - Migration owner: owns tables; never used for web requests.
 - `app_api`: non-login runtime privilege group; no RLS bypass, ownership, or role creation.
 - `app_bootstrap`: non-login role owning only the bounded organization-creation function. It has narrowly granted organization/membership access; ordinary logins must **not** inherit it.
+- `app_invitation_accept`: non-login function role for bounded invitation acceptance; no runtime login may inherit it.
+- `app_owner_guard`: non-login read-only trigger role enforcing the last-owner invariant.
 - `lira_api`: login inheriting `app_api`, provisioned separately from migrations. Test startup rejects privileged connections.
 
-Organization-scoped requests acquire a shared advisory lock, verify membership, set transaction-local tenant context, and use the same checked-out connection. Future roster changes must use the matching exclusive lock before changing memberships. Provider tokens never determine organization roles.
+Organization-scoped requests acquire a shared advisory lock, verify membership, set transaction-local tenant context, and use the same checked-out connection. Roster and team mutations use the matching exclusive lock before changing memberships. Provider tokens never determine organization roles.
 
 ## Recovery gate before real club data
 
@@ -46,4 +48,12 @@ Configure daily managed database backups, an independent encrypted export, and a
 
 ## Known operational work still pending
 
-Notification worker, upload processing, outbox retry/dead-letter management, retention cleanup, organization export/deletion, third-party error tracking, uptime alert destination, budget alerts, and independent backup automation are not configured yet. Structured API logs and health endpoints are implemented. This foundation must not be advertised as satisfying the complete internal MVP or paid-service operational gates.
+Hosted worker/email configuration, invitation email, upload processing, automated retention cleanup, organization export/deletion, third-party error tracking, uptime alert destination, budget alerts, and independent backup automation are not configured yet. Structured API logs and health endpoints are implemented. This foundation must not be advertised as satisfying the complete internal MVP or paid-service operational gates.
+
+## Attachment storage
+
+Before enabling internal club uploads, configure the private bucket and server-only API/worker credentials in the [attachment runbook](attachments.md). Migration 006 adds metadata, not provider buckets. The worker must be running for validation and cleanup. Real signed-transfer verification and an independent object backup/restore rehearsal are required before club file rollout; database backups do not include file bytes.
+
+## Workspace exports
+
+Migration 007 adds overview/template metadata and export jobs. Set `EXPORT_BUCKET` to a separate private JSON-only bucket in both API and worker services, using the existing server storage credential. See [export setup and retention](overview-and-exports.md). Leave it unset to run dashboard/templates without export storage. Verify real-provider transfers and cleanup before enabling exports for club data.

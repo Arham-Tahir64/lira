@@ -45,9 +45,11 @@ function token(
   issuer = `${base}/auth/v1`,
   expiration = "5m",
   audience = "authenticated",
+  amr: Array<{ method: string; timestamp: number }> = [],
 ) {
   return new SignJWT({
     session_id: session,
+    amr,
     user_metadata: { email_verified: true },
   })
     .setProtectedHeader({ alg: "ES256", kid: "test-key" })
@@ -98,4 +100,21 @@ it("rejects privileged keys before exposing browser configuration", async () => 
   expect(() => assertPublicSupabaseKey("sb_secret_do_not_expose")).toThrow(
     "never a service-role",
   );
+});
+
+it("uses the authentication method timestamp, not token refresh time, for recent authentication", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const identity = await verify(
+    await token(undefined, undefined, undefined, [
+      { method: "password", timestamp: now - 3600 },
+      { method: "token_refresh", timestamp: now },
+    ]),
+  );
+  expect(identity.authenticatedAt).toBe(now - 3600);
+  const refreshOnly = await verify(
+    await token(undefined, undefined, undefined, [
+      { method: "token_refresh", timestamp: now },
+    ]),
+  );
+  expect(refreshOnly.authenticatedAt).toBeUndefined();
 });

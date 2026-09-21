@@ -21,9 +21,25 @@ import type { VerifyIdentity, Identity } from "./identity.js";
 import { withIdentity, withTenant } from "./database.js";
 import { Problem } from "./problem.js";
 import { createIssue, listIssues, updateIssue } from "./work.js";
+import { organizationRoutes } from "./organization-routes.js";
+import { commentRoutes } from "./comment-routes.js";
+import { notificationRoutes } from "./notification-routes.js";
+import { createProject } from "./templates.js";
+import { dashboardRoutes } from "./dashboard-routes.js";
+import { workflowRoutes } from "./workflow-routes.js";
+import { requireAdmin } from "./policy.js";
 
+import { attachmentRoutes } from "./attachment-routes.js";
+import type { AttachmentOptions } from "./storage.js";
+import { exportRoutes } from "./export-routes.js";
+import type { ExportStorage } from "./export-storage.js";
+import type { InvitationMailConfig } from "./invitation-email.js";
 export interface AppOptions {
+  invitationMail?: InvitationMailConfig;
+  exportStorage?: ExportStorage;
+  attachments?: AttachmentOptions;
   pool: pg.Pool;
+  assignmentEmailEnabled?: boolean;
   verifyIdentity: VerifyIdentity;
   supabaseUrl: string;
   publicKey: string;
@@ -101,10 +117,30 @@ export async function buildApp(options: AppOptions) {
         message: "One or more fields are invalid.",
         requestId: request.id,
       });
+    if (err.code === "P0002")
+      return reply.code(404).send({
+        code: "invitation_unavailable",
+        message:
+          "This invitation is expired, used, revoked, or for a different email.",
+        requestId: request.id,
+      });
+    if (err.code === "P0003")
+      return reply.code(409).send({
+        code: "already_member",
+        message: "You already belong to this workspace.",
+        requestId: request.id,
+      });
+    if (err.code === "P0004")
+      return reply.code(409).send({
+        code: "last_owner",
+        message: "A workspace must retain at least one active owner.",
+        requestId: request.id,
+      });
     if (err.code === "P0001")
       return reply.code(429).send({
-        code: "organization_limit",
-        message: "You can create up to three workspaces during the pilot.",
+        code: "pilot_limit",
+        message:
+          "This action would exceed a pilot workspace or membership limit.",
         requestId: request.id,
       });
     if (err.statusCode === 429)
@@ -196,22 +232,16 @@ export async function buildApp(options: AppOptions) {
           return reply.code(201).send({ ...org, role: "owner" });
         },
       );
-      api.get<{ Params: Static<typeof OrgParams> }>(
-        "/orgs/:orgId/members",
-        { schema: { params: OrgParams, security } },
-        async (request) =>
-          withTenant(
-            options.pool,
-            request.identity,
-            request.params.orgId,
-            async (tx) =>
-              (
-                await tx.query(
-                  "SELECT id,user_id,role FROM app.memberships WHERE org_id=$1 AND state='active' ORDER BY created_at,id LIMIT 100",
-                  [request.params.orgId],
-                )
-              ).rows,
-          ),
+      await organizationRoutes(api, options.pool, options.invitationMail);
+      await workflowRoutes(api, options.pool);
+      await dashboardRoutes(api, options.pool);
+      await exportRoutes(api, options.pool, options.exportStorage);
+      await commentRoutes(api, options.pool);
+      await attachmentRoutes(api, options.pool, options.attachments);
+      await notificationRoutes(
+        api,
+        options.pool,
+        options.assignmentEmailEnabled,
       );
       api.get<{ Params: Static<typeof OrgParams> }>(
         "/orgs/:orgId/projects",
@@ -224,7 +254,7 @@ export async function buildApp(options: AppOptions) {
             async (tx) =>
               (
                 await tx.query(
-                  "SELECT id,name,key,description,lead_membership_id,archived_at FROM app.projects WHERE org_id=$1 ORDER BY created_at,id LIMIT 100",
+                  "SELECT id,name,key,description,lead_membership_id,archived_at,term,template_id FROM app.projects WHERE org_id=$1 ORDER BY created_at,id LIMIT 100",
                   [request.params.orgId],
                 )
               ).rows,
@@ -242,27 +272,13 @@ export async function buildApp(options: AppOptions) {
             request.identity,
             request.params.orgId,
             async (tx, member) => {
-              if (!["owner", "admin"].includes(member.role))
-                throw new Problem(
-                  403,
-                  "forbidden",
-                  "Only workspace administrators can create projects.",
-                );
-              const { rows } = await tx.query(
-                "INSERT INTO app.projects(org_id,name,key,description,lead_membership_id) VALUES($1,$2,$3,$4,$5) RETURNING id,name,key,description,lead_membership_id,archived_at",
-                [
-                  request.params.orgId,
-                  request.body.name,
-                  request.body.key,
-                  request.body.description ?? "",
-                  member.id,
-                ],
+              requireAdmin(member);
+              return createProject(
+                tx,
+                request.params.orgId,
+                member,
+                request.body,
               );
-              await tx.query(
-                "INSERT INTO app.boards(org_id,project_id) VALUES($1,$2)",
-                [request.params.orgId, rows[0].id],
-              );
-              return rows[0];
             },
           );
           return reply.code(201).send(project);
@@ -299,6 +315,7 @@ export async function buildApp(options: AppOptions) {
                 request.query.limit ?? 50,
                 request.query.after,
                 request.query.planningState,
+                request.query,
               ),
           ),
       );

@@ -14,18 +14,24 @@ import { migrate } from "../../../scripts/migrate.js";
 const alice: Identity = {
   id: randomUUID(),
   displayName: "Alice",
+  email: "alice@example.test",
+  authenticatedAt: Math.floor(Date.now() / 1000),
   issuedAt: Math.floor(Date.now() / 1000),
   sessionId: randomUUID(),
 };
 const bob: Identity = {
   id: randomUUID(),
   displayName: "Bob",
+  email: "bob@example.test",
+  authenticatedAt: Math.floor(Date.now() / 1000),
   issuedAt: Math.floor(Date.now() / 1000),
   sessionId: randomUUID(),
 };
 const member: Identity = {
   id: randomUUID(),
   displayName: "Member",
+  email: "member@example.test",
+  authenticatedAt: Math.floor(Date.now() / 1000),
   issuedAt: Math.floor(Date.now() / 1000),
   sessionId: randomUUID(),
 };
@@ -361,6 +367,328 @@ describe("real PostgreSQL foundation", () => {
       Object.keys((await app.inject({ url: "/api/config" })).json()).sort(),
     ).toEqual(["supabasePublicKey", "supabaseUrl"]);
   });
+  it("searches indexed issue text and exact keys with tenant-scoped filters", async () => {
+    const created = (
+      await issue("Robotics orientation", {
+        description: "Reserve telescopes",
+        priority: "high",
+        dueDate: "2026-10-01",
+        assigneeMembershipId: memberA,
+      })
+    ).json();
+    const url = `/api/v1/orgs/${orgA}/projects/${projectA}/issues`;
+    for (const q of ["telescopes", `EVENT-${created.number}`]) {
+      const r = await app.inject({
+        url: `${url}?q=${q}&priority=high&assignee=${memberA}&dueBefore=2026-10-02`,
+        headers: headers(),
+      });
+      expect(r.statusCode, r.body).toBe(200);
+      expect(r.json().items.map((i: { id: string }) => i.id)).toEqual([
+        created.id,
+      ]);
+    }
+    expect(
+      (
+        await app.inject({
+          url: `${url}?q=telescopes&priority=low`,
+          headers: headers(),
+        })
+      ).json().items,
+    ).toEqual([]);
+    expect(
+      (
+        await app.inject({
+          url: `/api/v1/orgs/${orgB}/projects/${projectB}/issues?q=telescopes`,
+          headers: headers(bob),
+        })
+      ).json().items,
+    ).toEqual([]);
+  });
+  it("validates label joins, preserves version on rejected changes, and records operational edits", async () => {
+    const a = await app.inject({
+      method: "POST",
+      url: `/api/v1/orgs/${orgA}/labels`,
+      headers: headers(),
+      payload: { name: "Recruitment" },
+    });
+    const b = await app.inject({
+      method: "POST",
+      url: `/api/v1/orgs/${orgB}/labels`,
+      headers: headers(bob),
+      payload: { name: "Secret" },
+    });
+    expect(a.statusCode, a.body).toBe(201);
+    expect(b.statusCode, b.body).toBe(201);
+    const task = (await issue("Label task")).json();
+    const patch = (labelIds: string[]) =>
+      app.inject({
+        method: "PATCH",
+        url: `/api/v1/orgs/${orgA}/issues/${task.id}`,
+        headers: { ...headers(), "if-match": '"1"' },
+        payload: {
+          labelIds,
+          title: "Updated task",
+          description: "Private body",
+        },
+      });
+    expect((await patch([b.json().id])).statusCode).toBe(400);
+    expect((await patch([a.json().id])).statusCode).toBe(200);
+    expect((await patch([])).statusCode).toBe(412);
+    const filtered = await app.inject({
+      url: `/api/v1/orgs/${orgA}/projects/${projectA}/issues?label=${a.json().id}`,
+      headers: headers(),
+    });
+    expect(filtered.json().items.map((i: { id: string }) => i.id)).toEqual([
+      task.id,
+    ]);
+    await expect(
+      withTenant(pool, alice, orgA, (tx) =>
+        tx.query(
+          "INSERT INTO app.issue_labels(org_id,issue_id,label_id) VALUES($1,$2,$3)",
+          [orgA, task.id, b.json().id],
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+    expect((await pool.query("SELECT * FROM app.labels")).rowCount).toBe(0);
+    const log = await admin.query(
+      "SELECT changes FROM app.activity_events WHERE issue_id=$1 AND action='issue.updated'",
+      [task.id],
+    );
+    expect(log.rows[0].changes.title).toEqual({
+      before: "Label task",
+      after: "Updated task",
+    });
+    expect(JSON.stringify(log.rows)).not.toContain("Private body");
+  });
+  it("serializes board moves, rejects stale/foreign neighbors, and pages each status", async () => {
+    const first = (
+      await issue("Rank first", { planningState: "backlog" })
+    ).json();
+    const second = (
+      await issue("Rank second", { planningState: "backlog" })
+    ).json();
+    const move = (beforeId: string | null, expectedVersion = 1) =>
+      app.inject({
+        method: "POST",
+        url: `/api/v1/orgs/${orgA}/issues/${second.id}/move`,
+        headers: headers(),
+        payload: {
+          status: "todo",
+          planningState: "backlog",
+          beforeId,
+          expectedVersion,
+        },
+      });
+    expect((await move(randomUUID())).statusCode).toBe(409);
+    const concurrent = await Promise.all([move(first.id), move(first.id)]);
+    expect(concurrent.map((r) => r.statusCode).sort()).toEqual([200, 412]);
+    const url = `/api/v1/orgs/${orgA}/projects/${projectA}/issues?planningState=backlog&status=todo&limit=1`;
+    const page1 = (await app.inject({ url, headers: headers() })).json();
+    expect(page1.items[0].id).toBe(second.id);
+    const page2 = (
+      await app.inject({
+        url: `${url}&after=${page1.nextCursor}`,
+        headers: headers(),
+      })
+    ).json();
+    expect(page2.items[0].id).toBe(first.id);
+    expect(
+      (
+        await app.inject({
+          url: `${url}&after=${randomUUID()}`,
+          headers: headers(),
+        })
+      ).statusCode,
+    ).toBe(400);
+    await admin.query("UPDATE app.issues SET rank=0.0000001 WHERE id=$1", [
+      first.id,
+    ]);
+    expect((await move(first.id, 2)).statusCode).toBe(200);
+    expect(
+      (
+        await admin.query("SELECT rank::float FROM app.issues WHERE id=$1", [
+          second.id,
+        ])
+      ).rows[0].rank,
+    ).toBeGreaterThan(0);
+  });
+  it("archives reversibly with role checks and returns chronological paginated history", async () => {
+    const url = `/api/v1/orgs/${orgA}/projects/${projectA}`;
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: `${url}/archive`,
+          headers: headers(member),
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: `${url}/archive`,
+          headers: headers(),
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect((await issue("Blocked after archive")).statusCode).toBe(409);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: `${url}/unarchive`,
+          headers: headers(),
+        })
+      ).statusCode,
+    ).toBe(200);
+    const page = (
+      await app.inject({ url: `${url}/activity?limit=1`, headers: headers() })
+    ).json();
+    expect(page.items[0].action).toBe("project.unarchive");
+    const next = (
+      await app.inject({
+        url: `${url}/activity?limit=1&after=${page.nextCursor}`,
+        headers: headers(),
+      })
+    ).json();
+    expect(next.items[0].action).toBe("project.archive");
+    expect(
+      (await app.inject({ url: `${url}/activity`, headers: headers(bob) }))
+        .statusCode,
+    ).toBe(404);
+  });
+
+  it("creates tasks directly in their chosen board status with assignment", async () => {
+    const result = await issue("Already underway", {
+      status: "in_progress",
+      assigneeMembershipId: memberA,
+    });
+    expect(result.statusCode, result.body).toBe(201);
+    expect(result.json().status).toBe("in_progress");
+    expect(result.json().assignee_membership_id).toBe(memberA);
+    expect(
+      (
+        await issue("Invalid completed backlog", {
+          status: "done",
+          planningState: "backlog",
+        })
+      ).statusCode,
+    ).toBe(400);
+  });
+  it("creates comments idempotently and paginates only the requested issue", async () => {
+    const task = (await issue("Discussion task")).json();
+    const url = `/api/v1/orgs/${orgA}/issues/${task.id}/comments`;
+    const payload = {
+      body: "**Book** the venue <script>bad()</script>",
+      clientKey: randomUUID(),
+    };
+    const post = () =>
+      app.inject({ method: "POST", url, headers: headers(member), payload });
+    const results = await Promise.all([post(), post()]);
+    expect(results.map((r) => r.statusCode)).toEqual([201, 201]);
+    expect(results[0].json().id).toBe(results[1].json().id);
+    await app.inject({
+      method: "POST",
+      url,
+      headers: headers(),
+      payload: { body: "Agreed", clientKey: randomUUID() },
+    });
+    const first = (
+      await app.inject({ url: `${url}?limit=1`, headers: headers() })
+    ).json();
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0].body).toBe(payload.body);
+    const next = (
+      await app.inject({
+        url: `${url}?limit=1&after=${first.nextCursor}`,
+        headers: headers(),
+      })
+    ).json();
+    expect(next.items[0].body).toBe("Agreed");
+    expect((await app.inject({ url, headers: headers(bob) })).statusCode).toBe(
+      404,
+    );
+    expect((await pool.query("SELECT * FROM app.comments")).rowCount).toBe(0);
+    await withTenant(pool, bob, orgB, async (tx) =>
+      expect((await tx.query("SELECT * FROM app.comments")).rowCount).toBe(0),
+    );
+    expect(
+      (
+        await admin.query(
+          "SELECT changes FROM app.activity_events WHERE issue_id=$1 AND action='comment.created'",
+          [task.id],
+        )
+      ).rows.every((r) => !JSON.stringify(r).includes("venue")),
+    ).toBe(true);
+  });
+  it("enforces comment ownership, versions, admin removal and archived read-only behavior", async () => {
+    const task = (await issue("Comment permissions")).json();
+    const url = `/api/v1/orgs/${orgA}/issues/${task.id}/comments`;
+    const created = await app.inject({
+      method: "POST",
+      url,
+      headers: headers(member),
+      payload: { body: "First draft", clientKey: randomUUID() },
+    });
+    const commentUrl = `/api/v1/orgs/${orgA}/comments/${created.json().id}`;
+    const patch = (who = member, version = 1) =>
+      app.inject({
+        method: "PATCH",
+        url: commentUrl,
+        headers: { ...headers(who), "if-match": `"${version}"` },
+        payload: { body: "Edited draft" },
+      });
+    expect((await patch(alice)).statusCode).toBe(403);
+    expect((await patch()).statusCode).toBe(204);
+    expect((await patch()).statusCode).toBe(412);
+    await admin.query("UPDATE app.projects SET archived_at=now() WHERE id=$1", [
+      projectA,
+    ]);
+    expect((await patch(member, 2)).statusCode).toBe(409);
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url,
+          headers: headers(member),
+          payload: { body: "Blocked", clientKey: randomUUID() },
+        })
+      ).statusCode,
+    ).toBe(409);
+    await admin.query("UPDATE app.projects SET archived_at=NULL WHERE id=$1", [
+      projectA,
+    ]);
+    expect(
+      (
+        await app.inject({
+          method: "DELETE",
+          url: commentUrl,
+          headers: { ...headers(), "if-match": '"2"' },
+        })
+      ).statusCode,
+    ).toBe(204);
+    const deleted = (await app.inject({ url, headers: headers() })).json()
+      .items[0];
+    expect(deleted.deleted_at).toBeTruthy();
+    expect(deleted.body).toBe("");
+    expect(
+      (
+        await admin.query("SELECT body FROM app.comments WHERE id=$1", [
+          deleted.id,
+        ])
+      ).rows[0].body,
+    ).toBe("");
+    await expect(
+      withTenant(pool, alice, orgA, async (tx, m) =>
+        tx.query(
+          "INSERT INTO app.comments(org_id,project_id,issue_id,author_membership_id,body,client_key) VALUES($1,$2,$3,$4,$5,$6)",
+          [orgA, projectB, task.id, m.id, "Cross project", randomUUID()],
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+  });
+
   it("revokes API access immediately on logout", async () => {
     expect(
       (

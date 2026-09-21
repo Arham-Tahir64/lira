@@ -3,6 +3,8 @@ import { Problem } from "./problem.js";
 export interface Identity {
   id: string;
   displayName: string;
+  email: string;
+  authenticatedAt?: number;
   issuedAt: number;
   sessionId: string;
 }
@@ -47,14 +49,35 @@ export function supabaseVerifier(
         email?: string;
       };
       if (user.id !== payload.sub) throw new Error("Identity mismatch");
-      if (!user.email_confirmed_at)
+      if (!user.email_confirmed_at || !user.email)
         throw new Problem(
           403,
           "email_unverified",
           "Verify your email before using a workspace.",
         );
+      const methods = Array.isArray(payload.amr) ? payload.amr : [];
+      const authenticationTimes = methods.flatMap((entry: unknown) => {
+        if (!entry || typeof entry !== "object") return [];
+        const method = entry as { method?: unknown; timestamp?: unknown };
+        return [
+          "password",
+          "oauth",
+          "otp",
+          "totp",
+          "sso/saml",
+          "magiclink",
+        ].includes(String(method.method)) &&
+          typeof method.timestamp === "number" &&
+          Number.isFinite(method.timestamp)
+          ? [method.timestamp]
+          : [];
+      });
       return {
         id: payload.sub,
+        email: user.email.toLowerCase(),
+        authenticatedAt: authenticationTimes.length
+          ? Math.max(...authenticationTimes)
+          : undefined,
         displayName: user.email?.split("@")[0]?.slice(0, 100) || "Member",
         issuedAt: payload.iat,
         sessionId: payload.session_id,

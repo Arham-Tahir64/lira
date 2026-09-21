@@ -4,6 +4,8 @@
 
 **Status:** Proposed architecture for implementation and validation. No application has been built or benchmarked as part of this document.
 
+**Accepted scope amendment · 5 September 2026:** The product is laptop/desktop first, per the user's implementation direction. Desktop browser usability and keyboard accessibility are the release targets. Mobile-specific layouts and validation are deferred. This amendment supersedes mobile-related requirements and phase exit criteria below; the remainder of the original architecture is preserved. Current implementation progress is tracked in [implementation status](implementation-status.md).
+
 ## Executive recommendation
 
 Build a **multi-tenant modular monolith**: React and TypeScript in the browser; a TypeScript/Fastify REST API; PostgreSQL, authentication, and private object storage supplied by Supabase; one web service and one background worker on Render. Use PostgreSQL for search and durable background work. Start with polling. Add Stripe only after other clubs show willingness to pay.
